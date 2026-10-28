@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 import {
   buildTabGroupList,
   buildUngroupedEntry,
+  formatEntryLine,
   formatNumberedUrlList,
   getGroupDisplayName,
   getTabUrl,
   normalizeUrl,
+  tabTitleFallback,
   toNumberedUrlLines,
   UNGROUPED_GROUP_ID,
   UNGROUPED_TITLE,
@@ -26,6 +28,8 @@ function tab(overrides = {}) {
 function ungroupedTab(overrides = {}) {
   return tab({ groupId: -1, ...overrides });
 }
+
+/* ── URL helpers ── */
 
 describe("normalizeUrl", () => {
   test("accepts normal browser URLs", () => {
@@ -74,6 +78,37 @@ describe("getGroupDisplayName", () => {
   });
 });
 
+/* ── title helpers ── */
+
+describe("tabTitleFallback", () => {
+  test("strips newlines and control characters", () => {
+    expect(tabTitleFallback("Line 1\nLine 2", "https://a.test/")).toBe("Line 1 Line 2");
+    expect(tabTitleFallback("Tab\there\rCR", "https://a.test/")).toBe("Tab here CR");
+    expect(tabTitleFallback("a\u0000b", "https://a.test/")).toBe("a b");
+  });
+
+  test("falls back to the URL when the title is empty", () => {
+    expect(tabTitleFallback("", "https://a.test/")).toBe("https://a.test/");
+    expect(tabTitleFallback("   ", "https://b.test/")).toBe("https://b.test/");
+    expect(tabTitleFallback(null, "https://c.test/")).toBe("https://c.test/");
+  });
+
+  test("handles titles containing '->' literally", () => {
+    expect(tabTitleFallback("a -> b", "https://a.test/")).toBe("a -> b");
+  });
+});
+
+describe("formatEntryLine", () => {
+  test("formats a numbered title+URL line", () => {
+    expect(formatEntryLine(1, "Example page", "https://example.com")).toBe(
+      "1. Example page -> https://example.com",
+    );
+    expect(formatEntryLine(3, "Docs", "https://docs.test/")).toBe(
+      "3. Docs -> https://docs.test/",
+    );
+  });
+});
+
 /* ── real groups (buildTabGroupList) ── */
 
 describe("buildTabGroupList", () => {
@@ -83,10 +118,10 @@ describe("buildTabGroupList", () => {
       { id: 10, windowId: 1, title: "Earlier", color: "blue", collapsed: true },
     ];
     const tabs = [
-      tab({ id: 1, groupId: 20, index: 7, url: "https://later-1.test/" }),
-      tab({ id: 2, groupId: 10, index: 4, url: "https://earlier-2.test/" }),
-      tab({ id: 3, groupId: 10, index: 1, url: "https://earlier-1.test/" }),
-      tab({ id: 4, groupId: 20, index: 9, url: "https://later-2.test/" }),
+      tab({ id: 1, groupId: 20, index: 7, url: "https://later-1.test/", title: "L1" }),
+      tab({ id: 2, groupId: 10, index: 4, url: "https://earlier-2.test/", title: "E2" }),
+      tab({ id: 3, groupId: 10, index: 1, url: "https://earlier-1.test/", title: "E1" }),
+      tab({ id: 4, groupId: 20, index: 9, url: "https://later-2.test/", title: "L2" }),
       ungroupedTab({ id: 5, index: 0, url: "https://ungrouped.test/" }),
     ];
 
@@ -102,18 +137,23 @@ describe("buildTabGroupList", () => {
     expect(result[0].hasMetadata).toBe(true);
   });
 
-  test("numbered payload preserves the original tab order", () => {
+  test("produces title+URL formatted lines preserving tab order", () => {
     const groups = [{ id: 1, windowId: 1, title: "Work" }];
     const tabs = [
-      tab({ id: 3, groupId: 1, index: 5, url: "https://third.test/" }),
-      tab({ id: 1, groupId: 1, index: 1, url: "https://first.test/" }),
-      tab({ id: 2, groupId: 1, index: 3, url: "https://second.test/" }),
+      tab({ id: 3, groupId: 1, index: 5, url: "https://third.test/", title: "Three" }),
+      tab({ id: 1, groupId: 1, index: 1, url: "https://first.test/", title: "One" }),
+      tab({ id: 2, groupId: 1, index: 3, url: "https://second.test/", title: "Two" }),
     ];
 
     const [group] = buildTabGroupList(groups, tabs, 1);
 
-    expect(formatNumberedUrlList(group.urls)).toBe(
-      "1. https://first.test/\n2. https://second.test/\n3. https://third.test/",
+    expect(group.formattedLines).toEqual([
+      "1. One -> https://first.test/",
+      "2. Two -> https://second.test/",
+      "3. Three -> https://third.test/",
+    ]);
+    expect(group.formattedText).toBe(
+      "1. One -> https://first.test/\n2. Two -> https://second.test/\n3. Three -> https://third.test/",
     );
   });
 
@@ -123,15 +163,34 @@ describe("buildTabGroupList", () => {
       { id: 20, windowId: 1, title: "Second group" },
     ];
     const tabs = [
-      tab({ id: 1, groupId: 10, index: 0, url: "https://a1.test/" }),
-      tab({ id: 2, groupId: 10, index: 1, url: "https://a2.test/" }),
-      tab({ id: 3, groupId: 20, index: 2, url: "https://b1.test/" }),
+      tab({ id: 1, groupId: 10, index: 0, url: "https://a1.test/", title: "A1" }),
+      tab({ id: 2, groupId: 10, index: 1, url: "https://a2.test/", title: "A2" }),
+      tab({ id: 3, groupId: 20, index: 2, url: "https://b1.test/", title: "B1" }),
     ];
 
     const [first, second] = buildTabGroupList(groups, tabs, 1);
 
-    expect(formatNumberedUrlList(first.urls)).toBe("1. https://a1.test/\n2. https://a2.test/");
-    expect(formatNumberedUrlList(second.urls)).toBe("1. https://b1.test/");
+    expect(first.formattedText).toBe(
+      "1. A1 -> https://a1.test/\n2. A2 -> https://a2.test/",
+    );
+    expect(second.formattedText).toBe("1. B1 -> https://b1.test/");
+  });
+
+  test("uses the URL as fallback when a tab has no title", () => {
+    const groups = [{ id: 10, windowId: 1, title: "Work" }];
+    const tabs = [
+      tab({ id: 1, groupId: 10, index: 0, url: "https://a.test/", title: "Titled" }),
+      tab({ id: 2, groupId: 10, index: 1, url: "https://b.test/", title: "" }),
+      tab({ id: 3, groupId: 10, index: 2, url: "https://c.test/", title: undefined }),
+    ];
+
+    const [group] = buildTabGroupList(groups, tabs, 1);
+
+    expect(group.formattedLines).toEqual([
+      "1. Titled -> https://a.test/",
+      "2. https://b.test/ -> https://b.test/",
+      "3. https://c.test/ -> https://c.test/",
+    ]);
   });
 
   test("ignores tabs and groups from other windows", () => {
@@ -157,7 +216,7 @@ describe("buildTabGroupList", () => {
       { id: 11, windowId: 1, title: "Full", color: "blue" },
     ];
     const tabs = [
-      tab({ id: 1, groupId: 11, index: 0, url: "https://full.test/" }),
+      tab({ id: 1, groupId: 11, index: 0, url: "https://full.test/", title: "F" }),
     ];
 
     const result = buildTabGroupList(groups, tabs, 1);
@@ -167,31 +226,33 @@ describe("buildTabGroupList", () => {
     expect(result[1].title).toBe("Empty");
     expect(result[1].tabCount).toBe(0);
     expect(result[1].urls).toEqual([]);
-    expect(result[1].skippedCount).toBe(0);
+    expect(result[1].formattedLines).toEqual([]);
+    expect(result[1].formattedText).toBe("");
   });
 
   test("skips tabs whose URL is inaccessible", () => {
     const groups = [{ id: 10, windowId: 1, title: "Mixed", color: "orange" }];
     const tabs = [
-      tab({ id: 1, groupId: 10, index: 0, url: "https://ok.test/" }),
-      tab({ id: 2, groupId: 10, index: 1, url: undefined, pendingUrl: undefined }),
+      tab({ id: 1, groupId: 10, index: 0, url: "https://ok.test/", title: "OK" }),
+      tab({ id: 2, groupId: 10, index: 1, url: undefined, pendingUrl: undefined, title: "Skipped" }),
       tab({ id: 3, groupId: 10, index: 2, url: "", title: "Blank" }),
-      tab({ id: 4, groupId: 10, index: 3, url: undefined, pendingUrl: "https://loading.test/" }),
+      tab({ id: 4, groupId: 10, index: 3, url: undefined, pendingUrl: "https://loading.test/", title: "Loading" }),
     ];
 
     const result = buildTabGroupList(groups, tabs, 1);
 
     expect(result[0].urls).toEqual(["https://ok.test/", "https://loading.test/"]);
-    expect(formatNumberedUrlList(result[0].urls)).toBe(
-      "1. https://ok.test/\n2. https://loading.test/",
-    );
     expect(result[0].tabCount).toBe(4);
     expect(result[0].skippedCount).toBe(2);
     expect(result[0].entries.map((entry) => entry.index)).toEqual([0, 3]);
+    expect(result[0].formattedLines).toEqual([
+      "1. OK -> https://ok.test/",
+      "2. Loading -> https://loading.test/",
+    ]);
   });
 
   test("creates a fallback entry for tabs whose group metadata is missing", () => {
-    const tabs = [tab({ id: 1, groupId: 99, index: 3, url: "https://orphan.test/" })];
+    const tabs = [tab({ id: 1, groupId: 99, index: 3, url: "https://orphan.test/", title: "Orphan" })];
 
     const result = buildTabGroupList([], tabs, 1);
 
@@ -199,6 +260,9 @@ describe("buildTabGroupList", () => {
     expect(result[0].id).toBe(99);
     expect(result[0].title).toBe("Untitled group");
     expect(result[0].hasMetadata).toBe(false);
+    expect(result[0].formattedLines).toEqual([
+      "1. Orphan -> https://orphan.test/",
+    ]);
   });
 
   test("handles null or missing API results", () => {
@@ -222,9 +286,9 @@ describe("buildUngroupedEntry", () => {
 
   test("collects only tabs whose groupId is exactly -1", () => {
     const tabs = [
-      ungroupedTab({ id: 1, index: 1, url: "https://u1.test/" }),
+      ungroupedTab({ id: 1, index: 1, url: "https://u1.test/", title: "U1" }),
       tab({ id: 2, groupId: 10, index: 2, url: "https://g1.test/" }),
-      ungroupedTab({ id: 3, index: 3, url: "https://u2.test/" }),
+      ungroupedTab({ id: 3, index: 3, url: "https://u2.test/", title: "U2" }),
       tab({ id: 4, groupId: 5, index: 4, url: "https://g2.test/" }),
     ];
 
@@ -237,13 +301,17 @@ describe("buildUngroupedEntry", () => {
     expect(entry.color).toBeNull();
     expect(entry.tabCount).toBe(2);
     expect(entry.urls).toEqual(["https://u1.test/", "https://u2.test/"]);
+    expect(entry.formattedLines).toEqual([
+      "1. U1 -> https://u1.test/",
+      "2. U2 -> https://u2.test/",
+    ]);
   });
 
   test("preserves tab-strip order for ungrouped tabs", () => {
     const tabs = [
-      ungroupedTab({ id: 3, index: 8, url: "https://third.test/" }),
-      ungroupedTab({ id: 1, index: 2, url: "https://first.test/" }),
-      ungroupedTab({ id: 2, index: 5, url: "https://second.test/" }),
+      ungroupedTab({ id: 3, index: 8, url: "https://third.test/", title: "Z" }),
+      ungroupedTab({ id: 1, index: 2, url: "https://first.test/", title: "A" }),
+      ungroupedTab({ id: 2, index: 5, url: "https://second.test/", title: "M" }),
     ];
 
     const entry = buildUngroupedEntry(tabs, 1);
@@ -253,11 +321,16 @@ describe("buildUngroupedEntry", () => {
       "https://second.test/",
       "https://third.test/",
     ]);
+    expect(entry.formattedLines).toEqual([
+      "1. A -> https://first.test/",
+      "2. M -> https://second.test/",
+      "3. Z -> https://third.test/",
+    ]);
   });
 
   test("ignores ungrouped tabs from other windows", () => {
     const tabs = [
-      ungroupedTab({ id: 1, windowId: 1, index: 0, url: "https://mine.test/" }),
+      ungroupedTab({ id: 1, windowId: 1, index: 0, url: "https://mine.test/", title: "Mine" }),
       ungroupedTab({ id: 2, windowId: 2, index: 1, url: "https://other.test/" }),
     ];
 
@@ -265,14 +338,15 @@ describe("buildUngroupedEntry", () => {
 
     expect(entry.tabCount).toBe(1);
     expect(entry.urls).toEqual(["https://mine.test/"]);
+    expect(entry.formattedLines).toEqual(["1. Mine -> https://mine.test/"]);
   });
 
-  test("skips ungrouped tabs without accessible URLs", () => {
+  test("skips ungrouped tabs without accessible URLs and numbers correctly", () => {
     const tabs = [
-      ungroupedTab({ id: 1, index: 0, url: "https://ok.test/" }),
-      ungroupedTab({ id: 2, index: 1, url: undefined, pendingUrl: undefined }),
+      ungroupedTab({ id: 1, index: 0, url: "https://ok.test/", title: "OK" }),
+      ungroupedTab({ id: 2, index: 1, url: undefined, pendingUrl: undefined, title: "Skipped" }),
       ungroupedTab({ id: 3, index: 2, url: "", title: "Blank" }),
-      ungroupedTab({ id: 4, index: 3, url: undefined, pendingUrl: "https://loading.test/" }),
+      ungroupedTab({ id: 4, index: 3, url: undefined, pendingUrl: "https://loading.test/", title: "Load" }),
     ];
 
     const entry = buildUngroupedEntry(tabs, 1);
@@ -280,37 +354,37 @@ describe("buildUngroupedEntry", () => {
     expect(entry.tabCount).toBe(4);
     expect(entry.skippedCount).toBe(2);
     expect(entry.urls).toEqual(["https://ok.test/", "https://loading.test/"]);
-    expect(formatNumberedUrlList(entry.urls)).toBe(
-      "1. https://ok.test/\n2. https://loading.test/",
-    );
+    expect(entry.formattedLines).toEqual([
+      "1. OK -> https://ok.test/",
+      "2. Load -> https://loading.test/",
+    ]);
   });
 
-  test("returns null when all ungrouped tabs lack URLs (and tabCount is > 0)", () => {
-    // tabCount reflects the actual count, urls can still be empty
+  test("handles newlines in tab titles for ungrouped tabs", () => {
     const tabs = [
-      ungroupedTab({ id: 1, index: 0, url: "", pendingUrl: undefined }),
+      ungroupedTab({ id: 1, index: 1, url: "https://a.test/", title: "Line\nOne" }),
+    ];
+
+    const entry = buildUngroupedEntry(tabs, 1);
+
+    expect(entry.formattedLines).toEqual([
+      "1. Line One -> https://a.test/",
+    ]);
+  });
+
+  test("returns real entry even when all ungrouped tabs lack URLs", () => {
+    const tabs = [
+      ungroupedTab({ id: 1, index: 0, url: "", pendingUrl: undefined, title: "Blank" }),
       ungroupedTab({ id: 2, index: 1, url: undefined }),
     ];
 
     const entry = buildUngroupedEntry(tabs, 1);
 
-    expect(entry).not.toBeNull(); // group still exists, just no URLs
+    expect(entry).not.toBeNull();
     expect(entry.tabCount).toBe(2);
     expect(entry.urls).toEqual([]);
-    expect(entry.skippedCount).toBe(2);
-  });
-
-  test("numbered output for the virtual group starts at 1", () => {
-    const tabs = [
-      ungroupedTab({ id: 1, index: 1, url: "https://a.test/" }),
-      ungroupedTab({ id: 2, index: 2, url: "https://b.test/" }),
-    ];
-
-    const entry = buildUngroupedEntry(tabs, 1);
-
-    expect(formatNumberedUrlList(entry.urls)).toBe(
-      "1. https://a.test/\n2. https://b.test/",
-    );
+    expect(entry.formattedLines).toEqual([]);
+    expect(entry.formattedText).toBe("");
   });
 });
 
@@ -326,7 +400,7 @@ describe("exported constants", () => {
   });
 });
 
-/* ── numbering helpers ── */
+/* ── backward-compat numbering helpers ── */
 
 describe("toNumberedUrlLines", () => {
   test("prefixes each URL with a sequential number starting at 1", () => {
