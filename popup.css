@@ -106,20 +106,23 @@ button:focus-visible {
 }
 
 .icon-btn {
-  padding: 3px;
-  border: 1px solid transparent;
-  background: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
   color: var(--muted);
-  border-radius: 6px;
+  border-radius: 50%;
   line-height: 1;
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex: none;
 }
 
 .icon-btn:hover {
-  background: var(--surface-alt);
+  background: var(--border);
   color: var(--text);
-  border-color: var(--border);
 }
 
 .icon-btn:disabled {
