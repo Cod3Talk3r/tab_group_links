@@ -8,6 +8,13 @@
 
 import { formatNumberedUrlList } from "./groups.js";
 
+/**
+ * `formatNumberedUrlList` is re-exported for callers that still format raw
+ * URL arrays themselves. Group entries normally use their own
+ * `formattedText` (title + URL) instead.
+ */
+export { formatNumberedUrlList };
+
 const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\u0000-\u001f\u007f]+/g;
 const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 const MAX_FILENAME_PART_LENGTH = 50;
@@ -75,17 +82,19 @@ export function buildTxtFilename(groupName, date = new Date()) {
 
 /**
  * Build the filename and content for a group's TXT export.
- * The content matches the clipboard format exactly: numbered URLs in the
- * order they were supplied (the group's original tab order).
+ *
+ * The content is the pre-formatted text (numbered title+URL lines joined
+ * with newlines), which is the same string shown in the preview and
+ * written to the clipboard.
  *
  * @param {unknown} groupName
- * @param {Array<string | null | undefined> | null | undefined} urls
+ * @param {string} content  pre-formatted text block (title + URL numbered lines)
  * @param {Date} [date]
  * @returns {{ filename: string, content: string }}
  */
-export function buildTxtExport(groupName, urls, date = new Date()) {
+export function buildTxtExport(groupName, content, date = new Date()) {
   return {
     filename: buildTxtFilename(groupName, date),
-    content: formatNumberedUrlList(urls),
+    content,
   };
 }
