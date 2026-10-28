@@ -11,7 +11,24 @@ import {
   toNumberedUrlLines,
   UNGROUPED_GROUP_ID,
   UNGROUPED_TITLE,
+  URL_LINE_PREFIX,
 } from "../src/groups.js";
+
+/**
+ * One entry in the exported text: the numbered title on its own line, then the
+ * URL indented by exactly three spaces and `-> ` on the next line.
+ *
+ * The prefix is spelled out literally on purpose, so the tests pin the
+ * contract instead of trusting the constant they are meant to verify.
+ */
+function block(num, title, url) {
+  return `${num}. ${title}\n   -> ${url}`;
+}
+
+/** Join entry blocks the way the extension does: one blank line between them. */
+function text(...blocks) {
+  return blocks.join("\n\n");
+}
 
 function tab(overrides = {}) {
   return {
@@ -99,13 +116,31 @@ describe("tabTitleFallback", () => {
 });
 
 describe("formatEntryLine", () => {
-  test("formats a numbered title+URL line", () => {
-    expect(formatEntryLine(1, "Example page", "https://example.com")).toBe(
-      "1. Example page -> https://example.com",
+  test("puts the numbered title on one line and the URL on the next", () => {
+    expect(formatEntryLine(1, "Page title", "https://example.com/a/very/long/url")).toBe(
+      "1. Page title\n   -> https://example.com/a/very/long/url",
     );
     expect(formatEntryLine(3, "Docs", "https://docs.test/")).toBe(
-      "3. Docs -> https://docs.test/",
+      "3. Docs\n   -> https://docs.test/",
     );
+  });
+
+  test("uses exactly three spaces before the arrow", () => {
+    expect(URL_LINE_PREFIX).toBe("   -> ");
+    const [, urlLine] = formatEntryLine(2, "Title", "https://a.test/").split("\n");
+    expect(urlLine).toBe("   -> https://a.test/");
+    expect(urlLine.startsWith("   -> ")).toBe(true);
+    expect(urlLine.startsWith("    -> ")).toBe(false);
+  });
+
+  test("never truncates or rewrites a long URL", () => {
+    const longUrl =
+      "https://example.com/a/very/long/path/that/keeps/going/and/going/and/going?token=abcdefghijklmnopqrstuvwxyz0123456789&page=42#section-7";
+    const line = formatEntryLine(1, "Long page", longUrl);
+
+    expect(line).toBe(`1. Long page\n   -> ${longUrl}`);
+    expect(line.split("\n")).toHaveLength(2);
+    expect(line).not.toContain("…");
   });
 });
 
@@ -137,7 +172,7 @@ describe("buildTabGroupList", () => {
     expect(result[0].hasMetadata).toBe(true);
   });
 
-  test("produces title+URL formatted lines preserving tab order", () => {
+  test("produces title+URL entry blocks preserving tab order", () => {
     const groups = [{ id: 1, windowId: 1, title: "Work" }];
     const tabs = [
       tab({ id: 3, groupId: 1, index: 5, url: "https://third.test/", title: "Three" }),
@@ -148,13 +183,23 @@ describe("buildTabGroupList", () => {
     const [group] = buildTabGroupList(groups, tabs, 1);
 
     expect(group.formattedLines).toEqual([
-      "1. One -> https://first.test/",
-      "2. Two -> https://second.test/",
-      "3. Three -> https://third.test/",
+      block(1, "One", "https://first.test/"),
+      block(2, "Two", "https://second.test/"),
+      block(3, "Three", "https://third.test/"),
     ]);
     expect(group.formattedText).toBe(
-      "1. One -> https://first.test/\n2. Two -> https://second.test/\n3. Three -> https://third.test/",
+      text(
+        block(1, "One", "https://first.test/"),
+        block(2, "Two", "https://second.test/"),
+        block(3, "Three", "https://third.test/"),
+      ),
     );
+    // Exactly one blank line between entries, and no trailing newline.
+    expect(group.formattedText).toBe(
+      "1. One\n   -> https://first.test/\n\n2. Two\n   -> https://second.test/\n\n3. Three\n   -> https://third.test/",
+    );
+    expect(group.formattedText.split("\n\n")).toHaveLength(3);
+    expect(group.formattedText.endsWith("\n")).toBe(false);
   });
 
   test("numbering starts at 1 for each tab group", () => {
@@ -171,9 +216,9 @@ describe("buildTabGroupList", () => {
     const [first, second] = buildTabGroupList(groups, tabs, 1);
 
     expect(first.formattedText).toBe(
-      "1. A1 -> https://a1.test/\n2. A2 -> https://a2.test/",
+      text(block(1, "A1", "https://a1.test/"), block(2, "A2", "https://a2.test/")),
     );
-    expect(second.formattedText).toBe("1. B1 -> https://b1.test/");
+    expect(second.formattedText).toBe(block(1, "B1", "https://b1.test/"));
   });
 
   test("uses the URL as fallback when a tab has no title", () => {
@@ -187,9 +232,9 @@ describe("buildTabGroupList", () => {
     const [group] = buildTabGroupList(groups, tabs, 1);
 
     expect(group.formattedLines).toEqual([
-      "1. Titled -> https://a.test/",
-      "2. https://b.test/ -> https://b.test/",
-      "3. https://c.test/ -> https://c.test/",
+      block(1, "Titled", "https://a.test/"),
+      block(2, "https://b.test/", "https://b.test/"),
+      block(3, "https://c.test/", "https://c.test/"),
     ]);
   });
 
@@ -246,9 +291,50 @@ describe("buildTabGroupList", () => {
     expect(result[0].skippedCount).toBe(2);
     expect(result[0].entries.map((entry) => entry.index)).toEqual([0, 3]);
     expect(result[0].formattedLines).toEqual([
-      "1. OK -> https://ok.test/",
-      "2. Loading -> https://loading.test/",
+      block(1, "OK", "https://ok.test/"),
+      block(2, "Loading", "https://loading.test/"),
     ]);
+    // Skipped tabs leave no gap: entry 1 and 2 are adjacent blocks.
+    expect(result[0].formattedText).toBe(
+      "1. OK\n   -> https://ok.test/\n\n2. Loading\n   -> https://loading.test/",
+    );
+  });
+
+  test("keeps long URLs complete on a single logical line", () => {
+    const longUrl =
+      "https://example.com/a/very/long/url/with/lots/of/segments/and/a/query?token=abcdefghijklmnopqrstuvwxyz0123456789&page=42#section-7";
+    const groups = [{ id: 10, windowId: 1, title: "Long" }];
+    const tabs = [
+      tab({ id: 1, groupId: 10, index: 0, url: longUrl, title: "Page title" }),
+      tab({ id: 2, groupId: 10, index: 1, url: "https://example.com/another/long/url", title: "Another page" }),
+    ];
+
+    const [group] = buildTabGroupList(groups, tabs, 1);
+
+    expect(group.urls).toEqual([longUrl, "https://example.com/another/long/url"]);
+    expect(group.formattedText).toBe(
+      "1. Page title\n   -> " +
+        longUrl +
+        "\n\n2. Another page\n   -> https://example.com/another/long/url",
+    );
+    // The long URL is one line of text, not wrapped or cut.
+    expect(group.formattedText.split("\n")).toContain(`   -> ${longUrl}`);
+  });
+
+  test("collapses control characters in titles so each entry stays two lines", () => {
+    const groups = [{ id: 10, windowId: 1, title: "Work" }];
+    const tabs = [
+      tab({ id: 1, groupId: 10, index: 0, url: "https://a.test/", title: "Line\nOne\tTabbed" }),
+      tab({ id: 2, groupId: 10, index: 1, url: "https://b.test/", title: "Two" }),
+    ];
+
+    const [group] = buildTabGroupList(groups, tabs, 1);
+
+    expect(group.formattedText).toBe(
+      "1. Line One Tabbed\n   -> https://a.test/\n\n2. Two\n   -> https://b.test/",
+    );
+    // 2 entries x 2 lines + 1 blank line between them.
+    expect(group.formattedText.split("\n")).toHaveLength(5);
   });
 
   test("creates a fallback entry for tabs whose group metadata is missing", () => {
@@ -261,7 +347,7 @@ describe("buildTabGroupList", () => {
     expect(result[0].title).toBe("Untitled group");
     expect(result[0].hasMetadata).toBe(false);
     expect(result[0].formattedLines).toEqual([
-      "1. Orphan -> https://orphan.test/",
+      block(1, "Orphan", "https://orphan.test/"),
     ]);
   });
 
@@ -302,8 +388,8 @@ describe("buildUngroupedEntry", () => {
     expect(entry.tabCount).toBe(2);
     expect(entry.urls).toEqual(["https://u1.test/", "https://u2.test/"]);
     expect(entry.formattedLines).toEqual([
-      "1. U1 -> https://u1.test/",
-      "2. U2 -> https://u2.test/",
+      block(1, "U1", "https://u1.test/"),
+      block(2, "U2", "https://u2.test/"),
     ]);
   });
 
@@ -322,9 +408,9 @@ describe("buildUngroupedEntry", () => {
       "https://third.test/",
     ]);
     expect(entry.formattedLines).toEqual([
-      "1. A -> https://first.test/",
-      "2. M -> https://second.test/",
-      "3. Z -> https://third.test/",
+      block(1, "A", "https://first.test/"),
+      block(2, "M", "https://second.test/"),
+      block(3, "Z", "https://third.test/"),
     ]);
   });
 
@@ -338,7 +424,7 @@ describe("buildUngroupedEntry", () => {
 
     expect(entry.tabCount).toBe(1);
     expect(entry.urls).toEqual(["https://mine.test/"]);
-    expect(entry.formattedLines).toEqual(["1. Mine -> https://mine.test/"]);
+    expect(entry.formattedLines).toEqual([block(1, "Mine", "https://mine.test/")]);
   });
 
   test("skips ungrouped tabs without accessible URLs and numbers correctly", () => {
@@ -355,8 +441,8 @@ describe("buildUngroupedEntry", () => {
     expect(entry.skippedCount).toBe(2);
     expect(entry.urls).toEqual(["https://ok.test/", "https://loading.test/"]);
     expect(entry.formattedLines).toEqual([
-      "1. OK -> https://ok.test/",
-      "2. Load -> https://loading.test/",
+      block(1, "OK", "https://ok.test/"),
+      block(2, "Load", "https://loading.test/"),
     ]);
   });
 
@@ -368,7 +454,7 @@ describe("buildUngroupedEntry", () => {
     const entry = buildUngroupedEntry(tabs, 1);
 
     expect(entry.formattedLines).toEqual([
-      "1. Line One -> https://a.test/",
+      block(1, "Line One", "https://a.test/"),
     ]);
   });
 
