@@ -61,6 +61,37 @@ export function getGroupDisplayName(group) {
 }
 
 /**
+ * Prepare a tab title for single-line display.
+ *
+ * Control characters (newlines, tabs, carriage returns, etc.) are replaced
+ * with a space so that one tab always maps to exactly one output line. If
+ * the title is empty after trimming, the URL is used as a fallback.
+ *
+ * @param {unknown} title
+ * @param {string} url  the tab's URL (already validated), used as fallback
+ * @returns {string}
+ */
+export function tabTitleFallback(title, url) {
+  const raw = typeof title === "string" ? title : "";
+  const clean = raw
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\n\r\t]+/g, " ")
+    .trim();
+  return clean || url;
+}
+
+/**
+ * Build one numbered output line for a tab entry.
+ *
+ * @param {number} num   1-based position
+ * @param {string} title already-sanitised single-line title
+ * @param {string} url
+ * @returns {string}  e.g. "1. Example page -> https://example.com"
+ */
+export function formatEntryLine(num, title, url) {
+  return `${num}. ${title} -> ${url}`;
+}
+
+/**
  * Build a group entry object from a list of tabs.
  * This is the common codepath shared by real groups and the virtual one.
  *
@@ -70,17 +101,19 @@ export function getGroupDisplayName(group) {
  * @param {boolean} hasMetadata
  * @param {Array<object>} groupTabs  pre-sorted tabs belonging to this group
  * @returns {{
-*   id: number,
-*   title: string,
-*   color: string | null,
-*   collapsed: boolean,
-*   tabCount: number,
-*   firstIndex: number,
-*   entries: Array<{ url: string, title: string, index: number, tabId: number | null }>,
-*   urls: string[],
-*   skippedCount: number,
-*   hasMetadata: boolean
-* }}
+ *   id: number,
+ *   title: string,
+ *   color: string | null,
+ *   collapsed: boolean,
+ *   tabCount: number,
+ *   firstIndex: number,
+ *   entries: Array<{ url: string, title: string, index: number, tabId: number | null }>,
+ *   urls: string[],
+ *   formattedLines: string[],
+ *   formattedText: string,
+ *   skippedCount: number,
+ *   hasMetadata: boolean
+ * }}
  */
 function buildGroupEntry(id, title, color, hasMetadata, groupTabs) {
   /** @type {Array<{ url: string, title: string, index: number, tabId: number | null }>} */
@@ -95,11 +128,15 @@ function buildGroupEntry(id, title, color, hasMetadata, groupTabs) {
     }
     entries.push({
       url,
-      title: typeof tab.title === "string" ? tab.title.trim() : "",
+      title: tabTitleFallback(tab.title, url),
       index: typeof tab.index === "number" ? tab.index : 0,
       tabId: typeof tab.id === "number" ? tab.id : null,
     });
   }
+
+  const formattedLines = entries.map((entry, idx) =>
+    formatEntryLine(idx + 1, entry.title, entry.url),
+  );
 
   return {
     id,
@@ -112,6 +149,8 @@ function buildGroupEntry(id, title, color, hasMetadata, groupTabs) {
       : Number.POSITIVE_INFINITY,
     entries,
     urls: entries.map((entry) => entry.url),
+    formattedLines,
+    formattedText: formattedLines.join("\n"),
     skippedCount,
     hasMetadata,
   };
@@ -133,17 +172,19 @@ function buildGroupEntry(id, title, color, hasMetadata, groupTabs) {
  * @param {Array<object> | null | undefined} tabs       – `chrome.tabs.query()` result
  * @param {number | null | undefined} windowId
  * @returns {Array<{
-*   id: number,
-*   title: string,
-*   color: string | null,
-*   collapsed: boolean,
-*   tabCount: number,
-*   firstIndex: number,
-*   entries: Array<{ url: string, title: string, index: number, tabId: number | null }>,
-*   urls: string[],
-*   skippedCount: number,
-*   hasMetadata: boolean
-* }>}
+ *   id: number,
+ *   title: string,
+ *   color: string | null,
+ *   collapsed: boolean,
+ *   tabCount: number,
+ *   firstIndex: number,
+ *   entries: Array<{ url: string, title: string, index: number, tabId: number | null }>,
+ *   urls: string[],
+ *   formattedLines: string[],
+ *   formattedText: string,
+ *   skippedCount: number,
+ *   hasMetadata: boolean
+ * }>}
  */
 export function buildTabGroupList(tabGroups, tabs, windowId) {
   const limitToWindow = typeof windowId === "number" && Number.isFinite(windowId);
@@ -231,8 +272,9 @@ export function buildUngroupedEntry(tabs, windowId) {
 /**
  * Format URLs as numbered lines ("1. <url>") in the given order.
  *
- * Empty values are ignored, and numbering starts at 1 for each call, so
- * only URLs that are actually included are numbered.
+ * Kept for backward compatibility. New code should use the
+ * `formattedLines` / `formattedText` properties on group entries instead,
+ * which include both the tab title and URL in each line.
  *
  * @param {Array<string | null | undefined> | null | undefined} urls
  * @returns {string[]}
@@ -246,6 +288,9 @@ export function toNumberedUrlLines(urls) {
 /**
  * Join URLs into the clipboard/TXT payload: one numbered URL per line, no
  * trailing newline.
+ *
+ * Kept for backward compatibility. New code should use `group.formattedText`.
+ *
  * @param {Array<string | null | undefined> | null | undefined} urls
  * @returns {string}
  */
