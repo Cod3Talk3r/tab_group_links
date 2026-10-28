@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tab Group Links</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1 class="app-title">Tab group links</h1>
+      <button id="refresh" class="icon-btn" type="button" title="Reload groups and tabs" aria-label="Reload groups and tabs">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+          <path d="M1.85 2.85a7 7 0 0 1 12.15 4.48M1.85 2.85V0m0 2.85h2.85M13.15 12.15a7 7 0 0 1-12.15-4.48m12.15 4.48V15m0-2.85h-2.85" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </header>
+
+    <main>
+      <section class="panel" aria-labelledby="groups-heading">
+        <h2 id="groups-heading">Tab groups</h2>
+        <ul id="group-list" class="group-list"></ul>
+        <p id="groups-empty" class="empty-state" hidden>
+          No tab groups in this window. Group some tabs, then press Refresh.
+        </p>
+      </section>
+
+      <section id="preview" class="panel" aria-labelledby="preview-heading" hidden>
+        <div class="preview-head">
+          <h2 id="preview-heading">Preview</h2>
+          <p id="preview-meta" class="meta"></p>
+        </div>
+        <ol id="preview-list" class="preview-list"></ol>
+        <p id="preview-empty" class="empty-state" hidden></p>
+        <p id="preview-note" class="note" hidden></p>
+        <div class="actions">
+          <button id="copy" class="primary" type="button">Copy URLs</button>
+          <button id="export-txt" class="secondary action-secondary" type="button">
+            Export TXT
+          </button>
+        </div>
+      </section>
+
+      <p id="status" class="status" role="status" aria-live="polite" hidden></p>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
