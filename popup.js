@@ -1,8 +1,6 @@
 import {
   buildTabGroupList,
   buildUngroupedEntry,
-  formatNumberedUrlList,
-  toNumberedUrlLines,
   UNGROUPED_GROUP_ID,
   UNGROUPED_TITLE,
 } from "./src/groups.js";
@@ -156,24 +154,20 @@ function renderPreview() {
   el.previewMeta.textContent =
     urlCount === 0 ? "0 URLs" : `${urlCount} numbered ${plural(urlCount, "URL")}`;
 
-  const numberedLines = toNumberedUrlLines(group.urls);
+  const lines = group.formattedLines;
   const fragment = document.createDocumentFragment();
-  group.entries.forEach((entry, position) => {
+  group.entries.forEach((_entry, position) => {
     const item = document.createElement("li");
     item.className = "preview-item";
 
     const body = document.createElement("span");
     body.className = "tab-body";
 
-    const title = document.createElement("span");
-    title.className = "tab-title";
-    title.textContent = entry.title || "(untitled tab)";
+    const code = document.createElement("code");
+    code.className = "tab-url";
+    code.textContent = lines[position] ?? "";
 
-    const url = document.createElement("code");
-    url.className = "tab-url";
-    url.textContent = numberedLines[position] ?? entry.url;
-
-    body.append(title, url);
+    body.append(code);
     item.append(body);
     fragment.append(item);
   });
@@ -311,7 +305,7 @@ async function copySelected() {
     return;
   }
 
-  const text = formatNumberedUrlList(group.urls);
+  const text = group.formattedText;
   el.copy.disabled = true;
   try {
     await writeToClipboard(text);
@@ -350,7 +344,7 @@ function downloadTextFile(filename, text) {
 
 function exportedFilename(group) {
   const name = isVirtualGroup(group) ? UNGROUPED_TITLE : group.title;
-  return buildTxtExport(name, group.urls).filename;
+  return buildTxtExport(name, group.formattedText).filename;
 }
 
 function exportSelected() {
@@ -365,7 +359,7 @@ function exportSelected() {
   }
 
   const name = isVirtualGroup(group) ? UNGROUPED_TITLE : group.title;
-  const { filename, content } = buildTxtExport(name, group.urls);
+  const { filename, content } = buildTxtExport(name, group.formattedText);
   el.exportTxt.disabled = true;
   try {
     downloadTextFile(filename, content);
