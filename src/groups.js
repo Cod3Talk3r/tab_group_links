@@ -80,15 +80,27 @@ export function tabTitleFallback(title, url) {
 }
 
 /**
- * Build one numbered output line for a tab entry.
+ * Prefix placed in front of the URL line of an entry: three spaces, then `-> `.
+ */
+export const URL_LINE_PREFIX = "   -> ";
+
+/**
+ * Build one numbered output block for a tab entry.
+ *
+ * The block spans two lines: the number and title on the first line, the URL
+ * on the second line indented with `URL_LINE_PREFIX`. The URL is never
+ * truncated or rewritten, so long URLs stay complete on their own line.
+ *
+ * Blocks are separated by one blank line once they are joined into the full
+ * text (see `buildGroupEntry`).
  *
  * @param {number} num   1-based position
  * @param {string} title already-sanitised single-line title
  * @param {string} url
- * @returns {string}  e.g. "1. Example page -> https://example.com"
+ * @returns {string}  e.g. "1. Example page\n   -> https://example.com"
  */
 export function formatEntryLine(num, title, url) {
-  return `${num}. ${title} -> ${url}`;
+  return `${num}. ${title}\n${URL_LINE_PREFIX}${url}`;
 }
 
 /**
@@ -134,6 +146,8 @@ function buildGroupEntry(id, title, color, hasMetadata, groupTabs) {
     });
   }
 
+  // Each element is a two-line block (number+title, then the URL). Blocks are
+  // joined with a blank line so long URLs never crowd the next entry.
   const formattedLines = entries.map((entry, idx) =>
     formatEntryLine(idx + 1, entry.title, entry.url),
   );
@@ -150,7 +164,7 @@ function buildGroupEntry(id, title, color, hasMetadata, groupTabs) {
     entries,
     urls: entries.map((entry) => entry.url),
     formattedLines,
-    formattedText: formattedLines.join("\n"),
+    formattedText: formattedLines.join("\n\n"),
     skippedCount,
     hasMetadata,
   };
