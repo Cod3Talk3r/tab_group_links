@@ -294,6 +294,7 @@ main {
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-all;
 }
