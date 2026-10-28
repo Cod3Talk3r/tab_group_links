@@ -2,8 +2,8 @@
 
 A small Manifest V3 browser extension that lists the tab groups in the current
 window (plus a virtual **Ungrouped Tabs** entry), previews their numbered tab
-URLs, and copies or exports every URL in a group as a numbered plain-text list,
-in the original tab order.
+titles and URLs, and copies or exports every tab in a group as a numbered
+plain-text list, in the original tab order.
 
 **Primary target:** Brave. **Expected-compatible:** Chrome, Edge (both support
 Manifest V3, the `chrome.tabGroups` API, and `navigator.clipboard` / Blob
@@ -23,8 +23,8 @@ No external dependencies, no remote services, no icons.
    every tab whose `groupId` is `-1` (the Chromium sentinel for ungrouped
    tabs), sorted by `tab.index`. This entry is purely a UI convenience; it
    never calls `chrome.tabGroups` or modifies the browser's actual tab groups.
-5. Selecting a real or virtual group shows a preview of its tab titles and
-   numbered URLs.
+5. Selecting a real or virtual group shows a preview of its numbered
+   title + URL lines.
 6. **Copy URLs** writes the numbered list to the clipboard. It uses
    `navigator.clipboard.writeText()` and falls back to a hidden `<textarea>`
    plus `document.execCommand("copy")` if the async clipboard API is
@@ -34,17 +34,28 @@ No external dependencies, no remote services, no icons.
    code is needed.
 8. Success and error feedback is shown in a live status region.
 
-Both outputs use exactly the same format:
+The preview, clipboard output, and TXT export all use the **exact same**
+format — a number, the tab title from the browser, ` -> `, and the URL:
 
 ```text
-1. https://example.com/page1
-2. https://example.com/page2
-3. https://example.com/page3
+1. Example page title -> https://example.com/page1
+2. Documentation -> https://example.com/docs
+3. Project dashboard -> https://example.com/dashboard
 ```
 
-Numbering starts at 1 for each group (real or virtual) and counts only URLs
-that are actually included. The preview shows the same numbered lines before
-you copy or export.
+All three surfaces are produced by one shared formatting path, so they cannot
+drift apart. Numbering starts at 1 for each group (real or virtual) and counts
+only URLs that are actually included, so skipped tabs never leave number gaps.
+
+Details of the format:
+
+- The title is the actual `tab.title` reported by the browser (trimmed).
+- If a tab title is missing or empty, its URL is used as the fallback title,
+  so no line is left blank.
+- Newlines and other control characters inside a title are collapsed to a
+  single space, so one tab always produces exactly one output line.
+- Titles that themselves contain `->` are passed through unchanged; only the
+  literal ` -> ` separator inserted between title and URL is significant.
 
 The export filename is descriptive and date-stamped, e.g.
 `tab-group-Work-2026-10-29.txt` or `tab-group-Ungrouped-Tabs-2026-10-29.txt`.
@@ -53,7 +64,8 @@ Windows-reserved device names, leading/trailing separators, and excessive
 length); an empty name becomes `untitled`.
 
 The popup header is compact: a single row with the extension title and a
-Refresh icon button.
+small, circular refresh icon button that is vertically centred with the
+title, keeps its focus ring, and has an accessible `aria-label`.
 
 Edge cases:
 
@@ -108,7 +120,8 @@ node --check src/export.js
 ```
 
 - `test/groups.test.js` covers grouping, ordering, URL skipping, numbered
-  output, and the virtual "Ungrouped Tabs" entry.
+  title + URL output, control-character handling in titles, and the virtual
+  "Ungrouped Tabs" entry.
 - `test/export.test.js` covers filename sanitization, date stamps, and TXT
   export content.
 - `test/extension-files.test.js` checks the manifest, permissions, local file
