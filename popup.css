@@ -1,0 +1,363 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-alt: #eef1f6;
+  --text: #1b1f27;
+  --muted: #5a6473;
+  --border: #d9dee8;
+  --accent: #4c6ef5;
+  --accent-text: #ffffff;
+  --success-bg: #e6f6ec;
+  --success-text: #146c33;
+  --error-bg: #fdecec;
+  --error-text: #a12626;
+  --focus: #845ef7;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171a21;
+    --surface: #1f232c;
+    --surface-alt: #272c37;
+    --text: #f0f3f8;
+    --muted: #a3adbd;
+    --border: #343a47;
+    --accent: #7d96ff;
+    --accent-text: #12151b;
+    --success-bg: #12331f;
+    --success-text: #8ce0a8;
+    --error-bg: #3a1717;
+    --error-text: #ffb0b0;
+    --focus: #b197fc;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 380px;
+  max-height: 580px;
+  overflow-y: auto;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-weight: 600;
+}
+
+h1 {
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+
+h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+button {
+  font: inherit;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ── compact header ── */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.app-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.icon-btn {
+  padding: 3px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--muted);
+  border-radius: 6px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.icon-btn:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+}
+
+/* ── main layout ── */
+
+main {
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 12px;
+  box-shadow: var(--shadow);
+}
+
+#groups-heading {
+  margin-bottom: 8px;
+}
+
+.secondary {
+  padding: 5px 10px;
+  background: var(--surface-alt);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.secondary:hover {
+  background: var(--border);
+}
+
+/* ── group list ── */
+
+.group-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.group-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  border: 1px solid transparent;
+}
+
+.group-item:hover {
+  border-color: var(--border);
+  background: var(--surface-alt);
+}
+
+.group-item[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--surface-alt);
+}
+
+.group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.group-count {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.color-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--muted);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15) inset;
+}
+
+/* virtual "Ungrouped Tabs" entry – no colour dot, subtle visual distinction */
+
+.virtual-group-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  font-style: italic;
+}
+
+/* ── empty state ── */
+
+.empty-state {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ── preview ── */
+
+.preview-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.preview-item {
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+}
+
+.preview-item:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.tab-body {
+  min-width: 0;
+}
+
+.tab-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tab-url {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* ── notes / status ── */
+
+.note {
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ── action buttons ── */
+
+.actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.primary {
+  flex: 1 1 auto;
+  padding: 8px 12px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.action-secondary {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  background: var(--surface-alt);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.status {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 12px;
+}
+
+.status--success {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.status--error {
+  background: var(--error-bg);
+  color: var(--error-text);
+}
+
+.status[hidden] {
+  display: none;
+}
