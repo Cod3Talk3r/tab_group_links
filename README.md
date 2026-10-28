@@ -24,7 +24,7 @@ No external dependencies, no remote services, no icons.
    tabs), sorted by `tab.index`. This entry is purely a UI convenience; it
    never calls `chrome.tabGroups` or modifies the browser's actual tab groups.
 5. Selecting a real or virtual group shows a preview of its numbered
-   title + URL lines.
+   title + URL entries.
 6. **Copy URLs** writes the numbered list to the clipboard. It uses
    `navigator.clipboard.writeText()` and falls back to a hidden `<textarea>`
    plus `document.execCommand("copy")` if the async clipboard API is
@@ -35,12 +35,19 @@ No external dependencies, no remote services, no icons.
 8. Success and error feedback is shown in a live status region.
 
 The preview, clipboard output, and TXT export all use the **exact same**
-format — a number, the tab title from the browser, ` -> `, and the URL:
+format: a numbered title on its own line, the URL on the next line prefixed
+with `   -> ` (three spaces and an arrow), and one blank line between
+consecutive entries:
 
 ```text
-1. Example page title -> https://example.com/page1
-2. Documentation -> https://example.com/docs
-3. Project dashboard -> https://example.com/dashboard
+1. Example page title
+   -> https://example.com/page1
+
+2. Documentation
+   -> https://example.com/docs
+
+3. Project dashboard
+   -> https://example.com/dashboard
 ```
 
 All three surfaces are produced by one shared formatting path, so they cannot
@@ -49,13 +56,21 @@ only URLs that are actually included, so skipped tabs never leave number gaps.
 
 Details of the format:
 
-- The title is the actual `tab.title` reported by the browser (trimmed).
+- The title is the actual `tab.title` reported by the browser (trimmed) and is
+  kept — titles are never dropped from the output.
+- The URL follows on its own line, prefixed with exactly three spaces and
+  `-> `. URLs are never truncated, shortened, escaped, or otherwise modified,
+  so a long URL stays complete and occupies a single logical line (the popup
+  preview may visually wrap it, but the generated text does not).
+- Exactly one blank line separates consecutive entries. There is no leading or
+  trailing blank line, so the output has no trailing newline.
 - If a tab title is missing or empty, its URL is used as the fallback title,
-  so no line is left blank.
+  so no title line is left blank.
 - Newlines and other control characters inside a title are collapsed to a
-  single space, so one tab always produces exactly one output line.
+  single space, so one tab always produces exactly two output lines (title,
+  then URL).
 - Titles that themselves contain `->` are passed through unchanged; only the
-  literal ` -> ` separator inserted between title and URL is significant.
+  literal `   -> ` prefix inserted in front of the URL is significant.
 
 The export filename is descriptive and date-stamped, e.g.
 `tab-group-Work-2026-10-29.txt` or `tab-group-Ungrouped-Tabs-2026-10-29.txt`.
@@ -119,11 +134,12 @@ node --check src/groups.js
 node --check src/export.js
 ```
 
-- `test/groups.test.js` covers grouping, ordering, URL skipping, numbered
-  title + URL output, control-character handling in titles, and the virtual
+- `test/groups.test.js` covers grouping, ordering, URL skipping, the exact
+  two-line entry format (title, then `   -> ` + URL), blank-line separation,
+  long URLs, control-character handling in titles, and the virtual
   "Ungrouped Tabs" entry.
-- `test/export.test.js` covers filename sanitization, date stamps, and TXT
-  export content.
+- `test/export.test.js` covers filename sanitization, date stamps, TXT export
+  content, and that preview, clipboard, and export text are identical.
 - `test/extension-files.test.js` checks the manifest, permissions, local file
   references, virtual group exports from `src/groups.js`, and that the runtime
   sources contain no remote URLs.
