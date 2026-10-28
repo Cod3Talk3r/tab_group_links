@@ -57,16 +57,24 @@ describe("extension files", () => {
     expect(source).toContain("buildUngroupedEntry");
     expect(source).toContain("UNGROUPED_GROUP_ID");
     expect(source).toContain("UNGROUPED_TITLE");
+    // Should use formattedLines / formattedText, not the old toNumberedUrlLines.
+    expect(source).toContain("group.formattedLines");
+    expect(source).toContain("group.formattedText");
+    expect(source).not.toContain("toNumberedUrlLines");
     expect(existsSync(join(root, "src/groups.js"))).toBe(true);
     expect(existsSync(join(root, "src/export.js"))).toBe(true);
     expect(source).not.toMatch(/from\s+["']https?:/);
   });
 
-  test("src/groups.js exports the ungrouped sentinel and title", () => {
+  test("src/groups.js exports the ungrouped sentinel, title, and title+URL formatting helpers", () => {
     const source = read("src/groups.js");
     expect(source).toContain("export const UNGROUPED_GROUP_ID");
     expect(source).toContain("export const UNGROUPED_TITLE");
     expect(source).toContain("export function buildUngroupedEntry");
+    expect(source).toContain("export function tabTitleFallback");
+    expect(source).toContain("export function formatEntryLine");
+    expect(source).toContain("formattedLines");
+    expect(source).toContain("formattedText");
     // Must not call chrome.tabGroups APIs (as opposed to mentioning them in comments).
     const codeOnly = source.replace(/\/\*\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     expect(codeOnly).not.toContain("chrome.tabGroups");
@@ -100,7 +108,12 @@ describe("extension files", () => {
       "src/export.js",
     ].map(read);
     for (const source of sources) {
-      expect(source).not.toMatch(/https?:\/\//);
+      // Ignore JSDoc/line comments: they may mention example URLs.
+      const codeOnly = source
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "");
+      expect(codeOnly).not.toMatch(/https?:\/\//);
     }
   });
 });
