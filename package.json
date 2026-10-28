@@ -1,0 +1,11 @@
+{
+  "name": "brave-tab-group-links",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dev tooling for the Tab Group Links browser extension. The extension itself has no runtime dependencies.",
+  "scripts": {
+    "test": "bun test",
+    "check": "node --check popup.js && node --check src/groups.js && node --check src/export.js"
+  }
+}
