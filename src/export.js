@@ -83,9 +83,9 @@ export function buildTxtFilename(groupName, date = new Date()) {
 /**
  * Build the filename and content for a group's TXT export.
  *
- * The content is the pre-formatted text (numbered title+URL lines joined
- * with newlines), which is the same string shown in the preview and
- * written to the clipboard.
+ * The content is the pre-formatted text (numbered title + indented URL blocks
+ * separated by one blank line), which is the same string shown in the preview
+ * and written to the clipboard. It is passed through unchanged.
  *
  * @param {unknown} groupName
  * @param {string} content  pre-formatted text block (title + URL numbered lines)
