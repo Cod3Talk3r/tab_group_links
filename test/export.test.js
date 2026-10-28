@@ -5,7 +5,6 @@ import {
   formatDateStamp,
   sanitizeFilenamePart,
 } from "../src/export.js";
-import { formatNumberedUrlList } from "../src/groups.js";
 
 const sampleDate = new Date(2026, 9, 29, 12, 0, 0);
 
@@ -86,31 +85,26 @@ describe("buildTxtFilename", () => {
 });
 
 describe("buildTxtExport", () => {
-  test("builds a numbered TXT payload in the supplied tab order", () => {
-    const urls = ["https://first.test/", "https://second.test/"];
-    const exported = buildTxtExport("Work", urls, sampleDate);
+  test("builds a TXT payload from pre-formatted content", () => {
+    const content =
+      "1. First page -> https://first.test/\n2. Second page -> https://second.test/";
+    const exported = buildTxtExport("Work", content, sampleDate);
 
     expect(exported).toEqual({
       filename: "tab-group-Work-2026-10-29.txt",
-      content: "1. https://first.test/\n2. https://second.test/",
+      content,
     });
-    expect(exported.content).toBe(formatNumberedUrlList(urls));
   });
 
-  test("numbers only URLs that are actually exported", () => {
-    const exported = buildTxtExport(
-      "Work",
-      ["https://first.test/", "", null, "https://third.test/"],
-      sampleDate,
-    );
+  test("preserves whatever content is passed in", () => {
+    const content = "1. Only one -> https://a.test/";
+    const exported = buildTxtExport("Group", content, sampleDate);
 
-    expect(exported.content).toBe(
-      "1. https://first.test/\n2. https://third.test/",
-    );
+    expect(exported.content).toBe(content);
   });
 
-  test("produces empty content when there is nothing to export", () => {
-    const exported = buildTxtExport("Empty", [], sampleDate);
+  test("produces empty content when passed an empty string", () => {
+    const exported = buildTxtExport("Empty", "", sampleDate);
 
     expect(exported.filename).toBe("tab-group-Empty-2026-10-29.txt");
     expect(exported.content).toBe("");
