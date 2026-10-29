@@ -3,9 +3,12 @@ import {
   buildTabGroupList,
   buildUngroupedEntry,
   formatEntryLine,
+  formatGroupHeaderLine,
   formatNumberedUrlList,
+  getExplicitGroupName,
   getGroupDisplayName,
   getTabUrl,
+  groupWithHeader,
   normalizeUrl,
   tabTitleFallback,
   toNumberedUrlLines,
@@ -187,18 +190,18 @@ describe("buildTabGroupList", () => {
       block(2, "Two", "https://second.test/"),
       block(3, "Three", "https://third.test/"),
     ]);
+    // formattedLines stay header-free; formattedText gains the group header
+    // for a named group: header line, one blank line, then the entry blocks.
     expect(group.formattedText).toBe(
-      text(
+      `Group name: Work\n\n${text(
         block(1, "One", "https://first.test/"),
         block(2, "Two", "https://second.test/"),
         block(3, "Three", "https://third.test/"),
-      ),
+      )}`,
     );
-    // Exactly one blank line between entries, and no trailing newline.
-    expect(group.formattedText).toBe(
-      "1. One\n   -> https://first.test/\n\n2. Two\n   -> https://second.test/\n\n3. Three\n   -> https://third.test/",
-    );
-    expect(group.formattedText.split("\n\n")).toHaveLength(3);
+    // Exactly one blank line between each part (header + entries), and no
+    // trailing newline.
+    expect(group.formattedText.split("\n\n")).toHaveLength(4);
     expect(group.formattedText.endsWith("\n")).toBe(false);
   });
 
@@ -216,9 +219,14 @@ describe("buildTabGroupList", () => {
     const [first, second] = buildTabGroupList(groups, tabs, 1);
 
     expect(first.formattedText).toBe(
-      text(block(1, "A1", "https://a1.test/"), block(2, "A2", "https://a2.test/")),
+      `Group name: First group\n\n${text(
+        block(1, "A1", "https://a1.test/"),
+        block(2, "A2", "https://a2.test/"),
+      )}`,
     );
-    expect(second.formattedText).toBe(block(1, "B1", "https://b1.test/"));
+    expect(second.formattedText).toBe(
+      `Group name: Second group\n\n${block(1, "B1", "https://b1.test/")}`,
+    );
   });
 
   test("uses the URL as fallback when a tab has no title", () => {
@@ -296,7 +304,10 @@ describe("buildTabGroupList", () => {
     ]);
     // Skipped tabs leave no gap: entry 1 and 2 are adjacent blocks.
     expect(result[0].formattedText).toBe(
-      "1. OK\n   -> https://ok.test/\n\n2. Loading\n   -> https://loading.test/",
+      `Group name: Mixed\n\n${text(
+        block(1, "OK", "https://ok.test/"),
+        block(2, "Loading", "https://loading.test/"),
+      )}`,
     );
   });
 
@@ -313,7 +324,7 @@ describe("buildTabGroupList", () => {
 
     expect(group.urls).toEqual([longUrl, "https://example.com/another/long/url"]);
     expect(group.formattedText).toBe(
-      "1. Page title\n   -> " +
+      `Group name: Long\n\n1. Page title\n   -> ` +
         longUrl +
         "\n\n2. Another page\n   -> https://example.com/another/long/url",
     );
@@ -331,10 +342,14 @@ describe("buildTabGroupList", () => {
     const [group] = buildTabGroupList(groups, tabs, 1);
 
     expect(group.formattedText).toBe(
-      "1. Line One Tabbed\n   -> https://a.test/\n\n2. Two\n   -> https://b.test/",
+      `Group name: Work\n\n${text(
+        block(1, "Line One Tabbed", "https://a.test/"),
+        block(2, "Two", "https://b.test/"),
+      )}`,
     );
-    // 2 entries x 2 lines + 1 blank line between them.
-    expect(group.formattedText.split("\n")).toHaveLength(5);
+    // header (1 line) + blank line + 2 entries x 2 lines + 1 blank line
+    // between entries = 7 lines total.
+    expect(group.formattedText.split("\n")).toHaveLength(7);
   });
 
   test("creates a fallback entry for tabs whose group metadata is missing", () => {
@@ -471,6 +486,103 @@ describe("buildUngroupedEntry", () => {
     expect(entry.urls).toEqual([]);
     expect(entry.formattedLines).toEqual([]);
     expect(entry.formattedText).toBe("");
+  });
+});
+
+/* ── group-name headers in the copy/export payload ── */
+
+describe("group-name headers in the copy/export payload", () => {
+  test("header helpers produce the exact `Group name: <name>` spelling", () => {
+    expect(formatGroupHeaderLine("games")).toBe("Group name: games");
+    expect(formatGroupHeaderLine("Work / Q3, project (urgent!)")).toBe(
+      "Group name: Work / Q3, project (urgent!)",
+    );
+  });
+
+  test("groupWithHeader prepends the header; the join separator adds the blank line", () => {
+    const blocks = [
+      block(1, "One", "https://a.test/"),
+      block(2, "Two", "https://b.test/"),
+    ];
+    const lines = groupWithHeader(blocks, "games");
+    expect(lines[0]).toBe("Group name: games");
+    expect(lines.join("\n\n")).toBe(
+      "Group name: games\n\n1. One\n   -> https://a.test/\n\n2. Two\n   -> https://b.test/",
+    );
+  });
+
+  test("groupWithHeader returns blocks unchanged for empty or missing names", () => {
+    const blocks = [block(1, "One", "https://a.test/")];
+    expect(groupWithHeader(blocks, "")).toBe(blocks);
+    expect(groupWithHeader(blocks, "   ")).toBe(blocks);
+    expect(groupWithHeader(blocks, null)).toBe(blocks);
+    expect(groupWithHeader([], "Named")).toEqual([]);
+  });
+
+  test("getExplicitGroupName returns only real titles, not synthetic names", () => {
+    expect(getExplicitGroupName({ title: "Work", color: "blue" })).toBe("Work");
+    expect(getExplicitGroupName({ title: "  Work  ", color: "blue" })).toBe("Work");
+    expect(getExplicitGroupName({ title: "", color: "blue" })).toBeNull();
+    expect(getExplicitGroupName({})).toBeNull();
+    expect(getExplicitGroupName(null)).toBeNull();
+  });
+
+  test("real group without a title exports without a header (no invented name)", () => {
+    const groups = [{ id: 10, windowId: 1, title: "", color: "blue" }];
+    const tabs = [tab({ id: 1, groupId: 10, index: 0, url: "https://a.test/", title: "One" })];
+    const [group] = buildTabGroupList(groups, tabs, 1);
+
+    expect(group.hasTitle).toBe(false);
+    expect(group.title).toBe("Untitled group (blue)");
+    expect(group.formattedText).toBe("1. One\n   -> https://a.test/");
+    expect(group.formattedText).not.toContain("Group name:");
+  });
+
+  test("orphan group without metadata exports without a header", () => {
+    const tabs = [tab({ id: 1, groupId: 99, index: 3, url: "https://orphan.test/", title: "Orphan" })];
+    const [group] = buildTabGroupList([], tabs, 1);
+
+    expect(group.hasMetadata).toBe(false);
+    expect(group.hasTitle).toBe(false);
+    expect(group.formattedText).toBe("1. Orphan\n   -> https://orphan.test/");
+  });
+
+  test("virtual Ungrouped Tabs exports without a header", () => {
+    const tabs = [ungroupedTab({ id: 1, index: 0, url: "https://u.test/", title: "U" })];
+    const entry = buildUngroupedEntry(tabs, 1);
+
+    expect(entry.hasTitle).toBe(false);
+    expect(entry.formattedText).toBe("1. U\n   -> https://u.test/");
+    expect(entry.formattedText).not.toContain("Group name:");
+  });
+
+  test("named group with punctuation in its title keeps the name verbatim in the header", () => {
+    const groups = [{ id: 10, windowId: 1, title: "Work / Q3, project (urgent!)" }];
+    const tabs = [tab({ id: 1, groupId: 10, index: 0, url: "https://a.test/", title: "One" })];
+    const [group] = buildTabGroupList(groups, tabs, 1);
+
+    expect(group.formattedText).toBe(
+      "Group name: Work / Q3, project (urgent!)\n\n1. One\n   -> https://a.test/",
+    );
+  });
+
+  test("exported named text round-trips through the import parser", async () => {
+    const groups = [{ id: 10, windowId: 1, title: "games" }];
+    const tabs = [
+      tab({ id: 1, groupId: 10, index: 0, url: "https://example.com/", title: "Game Website" }),
+      tab({ id: 2, groupId: 10, index: 1, url: "https://example.org/", title: "Another Game Website" }),
+    ];
+    const [group] = buildTabGroupList(groups, tabs, 1);
+
+    const { parseImportText } = await import("../src/import.js");
+    const parsed = parseImportText(group.formattedText);
+    expect(parsed.warnings).toEqual([]);
+    expect(parsed.groups).toHaveLength(1);
+    expect(parsed.groups[0].name).toBe("games");
+    expect(parsed.groups[0].entries).toEqual([
+      { title: "Game Website", url: "https://example.com/" },
+      { title: "Another Game Website", url: "https://example.org/" },
+    ]);
   });
 });
 

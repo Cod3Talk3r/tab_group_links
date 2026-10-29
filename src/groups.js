@@ -61,6 +61,51 @@ export function getGroupDisplayName(group) {
 }
 
 /**
+ * The group's explicitly set title, or null when the group has no real name.
+ *
+ * This is what either Copy/Export and the import parser use when a group has
+ * an actual name. Synthetic display names such as "Untitled group (blue)"
+ * and the virtual "Ungrouped Tabs" entry return null, so no header is
+ * invented for them.
+ *
+ * @param {{ title?: unknown } | null | undefined} group
+ * @returns {string | null}
+ */
+export function getExplicitGroupName(group) {
+  const title = typeof group?.title === "string" ? group.title.trim() : "";
+  return title ? title : null;
+}
+
+/**
+ * The `Group name: <name>` header line used by Copy, Export, the preview
+ * and the import parser (see `parseImportText` in `src/import.js`).
+ * @param {unknown} groupName
+ * @returns {string}
+ */
+export function formatGroupHeaderLine(groupName) {
+  return `Group name: ${typeof groupName === "string" ? groupName : ""}`;
+}
+
+/**
+ * Prepend `Group name: <name>` to joinable entry blocks.
+ *
+ * Callers join the returned array with `"\n\n"` (the same separator used
+ * between entry blocks), which yields the header, exactly one blank line,
+ * then the first block — so pasting the result back through the importer
+ * restores the same named group. A group without a name returns the blocks
+ * unchanged.
+ *
+ * @param {Array<string>} entryBlocks  2-line blocks (number+title, then URL)
+ * @param {unknown} groupName
+ * @returns {string[]}  header line + blocks, or just the blocks
+ */
+export function groupWithHeader(entryBlocks, groupName) {
+  const blocks = Array.isArray(entryBlocks) ? entryBlocks : [];
+  const name = typeof groupName === "string" ? groupName.trim() : "";
+  return name && blocks.length > 0 ? [formatGroupHeaderLine(name), ...blocks] : blocks;
+}
+
+/**
  * Prepare a tab title for single-line display.
  *
  * Control characters (newlines, tabs, carriage returns, etc.) are replaced
@@ -124,10 +169,11 @@ export function formatEntryLine(num, title, url) {
  *   formattedLines: string[],
  *   formattedText: string,
  *   skippedCount: number,
- *   hasMetadata: boolean
+ *   hasMetadata: boolean,
+ *   hasTitle: boolean
  * }}
  */
-function buildGroupEntry(id, title, color, hasMetadata, groupTabs) {
+function buildGroupEntry(id, title, color, hasMetadata, hasTitle, groupTabs) {
   /** @type {Array<{ url: string, title: string, index: number, tabId: number | null }>} */
   const entries = [];
   let skippedCount = 0;
@@ -164,9 +210,12 @@ function buildGroupEntry(id, title, color, hasMetadata, groupTabs) {
     entries,
     urls: entries.map((entry) => entry.url),
     formattedLines,
-    formattedText: formattedLines.join("\n\n"),
+    formattedText: formattedLines.length > 0
+      ? groupWithHeader(formattedLines, hasTitle ? title : null).join("\n\n")
+      : "",
     skippedCount,
     hasMetadata,
+    hasTitle: Boolean(hasTitle),
   };
 }
 
@@ -236,10 +285,11 @@ export function buildTabGroupList(tabGroups, tabs, windowId) {
   const result = [];
   for (const [id, groupTabs] of tabsByGroup) {
     const metadata = metadataById.get(id);
-    const name = getGroupDisplayName(metadata);
+    const explicitName = getExplicitGroupName(metadata);
+    const name = explicitName ?? getGroupDisplayName(metadata);
     const color = typeof metadata?.color === "string" ? metadata.color : null;
     const collapsed = metadata?.collapsed === true;
-    const entry = buildGroupEntry(id, name, color, Boolean(metadata), groupTabs);
+    const entry = buildGroupEntry(id, name, color, Boolean(metadata), Boolean(explicitName), groupTabs);
     entry.collapsed = collapsed;
     result.push(entry);
   }
@@ -280,7 +330,7 @@ export function buildUngroupedEntry(tabs, windowId) {
 
   if (ungrouped.length === 0) return null;
 
-  return buildGroupEntry(UNGROUPED_GROUP_ID, UNGROUPED_TITLE, null, false, ungrouped);
+  return buildGroupEntry(UNGROUPED_GROUP_ID, UNGROUPED_TITLE, null, false, false, ungrouped);
 }
 
 /**

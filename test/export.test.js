@@ -5,7 +5,7 @@ import {
   formatDateStamp,
   sanitizeFilenamePart,
 } from "../src/export.js";
-import { buildTabGroupList } from "../src/groups.js";
+import { buildTabGroupList, getExplicitGroupName, groupWithHeader } from "../src/groups.js";
 
 const sampleDate = new Date(2026, 9, 29, 12, 0, 0);
 
@@ -168,7 +168,7 @@ describe("preview / clipboard / TXT export parity", () => {
     ];
   }
 
-  test("all three surfaces produce byte-identical text", () => {
+  test("all three surfaces produce byte-identical text including the group header", () => {
     const groups = [{ id: 7, windowId: 1, title: "Work", color: "blue" }];
     const tabs = tabsForGroup();
     // Drop the URL of the middle tab so it is skipped like an inaccessible tab.
@@ -177,34 +177,38 @@ describe("preview / clipboard / TXT export parity", () => {
 
     const [group] = buildTabGroupList(groups, tabs, 1);
 
-    // Preview joins the per-entry blocks the same way the shared text does.
-    const previewText = group.formattedLines.join("\n\n");
-    // The clipboard gets `group.formattedText` verbatim.
+    // The preview joins the header + per-entry blocks the same way the
+    // shared text does: `groupWithHeader` (header, blank line, then blocks).
+    const previewText = groupWithHeader(group.formattedLines, "Work").join("\n\n");
+    // The clipboard gets `group.formattedText` verbatim (already headed).
     const clipboardText = group.formattedText;
     // The TXT export wraps that same string in a Blob.
     const { content: exportText } = buildTxtExport("Work", group.formattedText, sampleDate);
 
     expect(previewText).toBe(clipboardText);
     expect(clipboardText).toBe(exportText);
+    expect(group.hasTitle).toBe(true);
     expect(group.skippedCount).toBe(1);
     expect(group.formattedText).toBe(
-      text(
+      `Group name: Work\n\n${text(
         block(
           1,
           "Page title",
           "https://example.com/a/very/long/url/that/keeps/going/and/going?q=1",
         ),
         block(2, "Another page", "https://example.com/another/long/url"),
-      ),
+      )}`,
     );
   });
 
-  test("formatted text uses one blank line between entries and no trailing newline", () => {
+  test("formatted text uses a header, one blank line between entries, and no trailing newline", () => {
     const groups = [{ id: 7, windowId: 1, title: "Work", color: "blue" }];
     const [group] = buildTabGroupList(groups, tabsForGroup(), 1);
 
+    expect(group.formattedText.startsWith("Group name: Work\n\n")).toBe(true);
     expect(group.formattedText.endsWith("\n")).toBe(false);
     expect(group.formattedText).not.toContain("\n\n\n");
-    expect(group.formattedText.split("\n\n")).toHaveLength(3);
+    // header + 2 entries = 4 blank-line-separated parts.
+    expect(group.formattedText.split("\n\n")).toHaveLength(4);
   });
 });
