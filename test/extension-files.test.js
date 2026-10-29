@@ -170,6 +170,28 @@ describe("extension files", () => {
     expect(conflictBlock[0]).not.toContain("applyImportToSavedGroups");
   });
 
+  test("the export preview uses the import-style details/summary toggle", () => {
+    const html = read("popup.html");
+    const source = read("popup.js");
+    // Same interaction pattern as the Import panel: a native <details>.
+    expect(html).toMatch(/<details[^>]*class="preview-details"/);
+    expect(html).toMatch(/<summary[^>]*id="preview-heading"/);
+    expect(html).not.toContain('id="preview-toggle"');
+    // Collapsed by default: the <details> has no `open` attribute and the
+    // body inside it must not carry `hidden` (details manages visibility).
+    expect(html.match(/<details[^>]*class="preview-details"[^>]*>/)[0]).not.toContain("open");
+    expect(html.match(/<div id="preview-body">/)).not.toBeNull();
+    // Export actions live outside the collapsible details, after it.
+    const detailsEnd = html.indexOf("</details>");
+    expect(html.indexOf("id=\"copy\"")).toBeGreaterThan(detailsEnd);
+    expect(html.indexOf("id=\"export-txt\"")).toBeGreaterThan(detailsEnd);
+    // No manual JS toggling is needed (native checkbox behavior); remaining
+    // JS just renders content into the collapsed-at-first panels.
+    expect(source).not.toContain("previewToggle");
+    expect(source).toContain("el.copy.addEventListener(\"click\"");
+    expect(source).toContain("el.exportTxt.addEventListener(\"click\"");
+  });
+
   test("only src/open-links.js can create tabs with URLs", () => {
     const openLinks = read("src/open-links.js");
     expect(openLinks).toContain("tabs.create");

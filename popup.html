@@ -26,13 +26,17 @@
       </section>
 
       <section id="preview" class="panel" aria-labelledby="preview-heading" hidden>
-        <div class="preview-head">
-          <h2 id="preview-heading">Preview</h2>
-          <p id="preview-meta" class="meta"></p>
-        </div>
-        <ol id="preview-list" class="preview-list"></ol>
-        <p id="preview-empty" class="empty-state" hidden></p>
-        <p id="preview-note" class="note" hidden></p>
+        <details class="preview-details">
+          <summary id="preview-heading" class="preview-summary">
+            <span>Preview</span>
+            <span id="preview-meta" class="meta"></span>
+          </summary>
+          <div id="preview-body">
+            <ol id="preview-list" class="preview-list"></ol>
+            <p id="preview-empty" class="empty-state" hidden></p>
+            <p id="preview-note" class="note" hidden></p>
+          </div>
+        </details>
         <div class="actions">
           <button id="copy" class="primary" type="button">Copy URLs</button>
           <button id="export-txt" class="secondary action-secondary" type="button">

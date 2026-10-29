@@ -666,3 +666,41 @@ button:disabled {
   font-size: 12px;
   font-weight: 600;
 }
+
+/* ── collapsible export preview (same pattern as the Import panel) ── */
+
+.preview-details {
+  margin: -11px -12px 0; /* let the summary span the full panel width */
+}
+
+.preview-details > summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.preview-details > summary:hover {
+  color: var(--text);
+}
+
+.preview-details > summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.preview-details[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.preview-details > summary .meta {
+  text-align: right;
+}

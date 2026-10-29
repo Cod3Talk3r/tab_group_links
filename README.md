@@ -24,7 +24,9 @@ No external dependencies, no remote services, no icons.
    tabs), sorted by `tab.index`. This entry is purely a UI convenience; it
    never calls `chrome.tabGroups` or modifies the browser's actual tab groups.
 5. Selecting a real or virtual group shows a preview of its numbered
-   title + URL entries.
+   title + URL entries. The preview is collapsed by default to keep the popup
+   compact; its keyboard-operable toggle expands/collapses the links, and the
+   Copy and Export buttons stay visible and usable while collapsed.
 6. **Copy URLs** writes the numbered list to the clipboard. It uses
    `navigator.clipboard.writeText()` and falls back to a hidden `<textarea>`
    plus `document.execCommand("copy")` if the async clipboard API is
