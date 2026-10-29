@@ -16,8 +16,15 @@ describe("manifest.json", () => {
   });
 
   test("requests only the permissions the extension uses", () => {
-    expect(manifest.permissions).toEqual(["tabGroups", "tabs", "clipboardWrite"]);
+    expect(manifest.permissions).toEqual([
+      "tabGroups",
+      "tabs",
+      "clipboardWrite",
+      "storage",
+    ]);
     expect(manifest.permissions).not.toContain("downloads");
+    expect(manifest.permissions).not.toContain("activeTab");
+    expect(manifest.permissions).not.toContain("clipboardRead");
     expect(manifest.host_permissions).toBeUndefined();
     expect(manifest.optional_permissions).toBeUndefined();
     expect(manifest.content_scripts).toBeUndefined();
@@ -106,6 +113,9 @@ describe("extension files", () => {
       "popup.css",
       "src/groups.js",
       "src/export.js",
+      "src/import.js",
+      "src/storage.js",
+      "src/open-links.js",
     ].map(read);
     for (const source of sources) {
       // Ignore JSDoc/line comments: they may mention example URLs.
@@ -115,5 +125,36 @@ describe("extension files", () => {
         .replace(/\/\/.*$/gm, "");
       expect(codeOnly).not.toMatch(/https?:\/\//);
     }
+  });
+
+  test("import and storage modules never touch the tabs API", () => {
+    for (const file of ["src/import.js", "src/storage.js"]) {
+      const codeOnly = read(file)
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "");
+      expect(codeOnly).not.toContain("chrome.tabs");
+      expect(codeOnly).not.toContain("tabs.create");
+      expect(codeOnly).not.toContain("openLinkInBackground");
+      expect(codeOnly).not.toContain("openLinksInBackground");
+      expect(codeOnly).not.toContain(".create({ url");
+    }
+  });
+
+  test("only src/open-links.js can create tabs with URLs", () => {
+    const openLinks = read("src/open-links.js");
+    expect(openLinks).toContain("tabs.create");
+
+    // The import pipeline must never require or call the tab-opening module.
+    for (const file of ["src/import.js", "src/storage.js"]) {
+      const source = read(file);
+      expect(source).not.toContain("open-links");
+    }
+
+    // popup.js may only open tabs through the open-links helpers, never
+    // directly through chrome.tabs.
+    const popup = read("popup.js");
+    expect(popup).toContain('from "./src/open-links.js"');
+    expect(popup).not.toContain("chrome.tabs");
+    expect(popup).not.toContain("tabs.create(");
   });
 });
