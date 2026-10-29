@@ -37,22 +37,31 @@ No external dependencies, no remote services, no icons.
 The preview, clipboard output, and TXT export all use the **exact same**
 format: a numbered title on its own line, the URL on the next line prefixed
 with `   -> ` (three spaces and an arrow), and one blank line between
-consecutive entries:
+consecutive entries. When the selected links belong to a **named** Chrome
+tab group, the text starts with that group's name on a `Group name: <name>`
+line, followed by one blank line:
 
 ```text
+Group name: Work
+
 1. Example page title
    -> https://example.com/page1
 
 2. Documentation
    -> https://example.com/docs
-
-3. Project dashboard
-   -> https://example.com/dashboard
 ```
 
 All three surfaces are produced by one shared formatting path, so they cannot
 drift apart. Numbering starts at 1 for each group (real or virtual) and counts
 only URLs that are actually included, so skipped tabs never leave number gaps.
+
+The group header is added only when the tab group has a real, explicit title.
+Synthetic names such as "Untitled group (blue)", orphan groups without
+metadata, and the virtual "Ungrouped Tabs" entry are exported without a
+header, exactly as before — no name is ever invented. A name is included as
+written, including spaces and punctuation, and the exact `Group name: <name>`
+line is recognised again by the importer (see "Importing saved links"), so
+copied/exported text round-trips back into the same group name.
 
 Details of the format:
 
@@ -100,6 +109,7 @@ Edge cases:
 | `tabGroups`      | Read tab group titles, colors, and membership.              |
 | `tabs`           | Read tab URLs (Chrome/Brave hide URLs without it).           |
 | `clipboardWrite` | Write the URL list to the clipboard (including the fallback). |
+| `storage`        | Keep imported/saved link groups in `chrome.storage.local`.  |
 
 TXT export uses an `<a download>` link with a Blob object URL, which needs no
 additional permission. In particular, the extension does **not** request the
@@ -107,7 +117,143 @@ additional permission. In particular, the extension does **not** request the
 permissions because it only reads tabs that are already returned by
 `chrome.tabs.query()`.
 
-No host permissions, no content scripts, no background worker, no storage.
+No host permissions, no content scripts, no background worker.
+
+## Importing saved links
+
+> New in this version. Importing never opens a website: parsed links are only
+> previewed and then stored as extension data in `chrome.storage.local`.
+> Opening a saved link is always an explicit, separate action.
+
+The popup has an **Import saved links** panel (collapsed by default). Paste
+text or choose a `.txt` file, review the parsed groups and links in the
+preview, optionally edit group names, then press **Import**. Cancel discards
+the preview without saving anything.
+
+Two input sources are supported:
+
+- **Paste text** — a text area where you can type or press Ctrl+V, plus an
+  explicit **Paste** button that reads the clipboard on demand
+  (`navigator.clipboard.readText()`). The clipboard is never read
+  automatically; a permission or focus failure shows an error and tells you
+  to paste manually instead.
+- **.txt file** — a **Choose .txt…** button opens a file picker
+  (`accept=".txt,text/plain"`). The file is read with `File.text()`, capped
+  at 5&nbsp;MB. No library is used.
+
+### Supported import formats
+
+Format 1 below is the extension's own export format and the primary
+compatibility target; formats 2–4 are accepted as conveniences, and any
+subset can be mixed in one input.
+
+**1. Title + indented URL (the export format).** A numbered title on one
+line and its URL on the next line prefixed with `   -> ` (three spaces and an
+arrow), blocks separated by blank lines. The written numbers are ignored;
+line order is kept:
+
+```text
+1. Python Documentation
+   -> https://docs.python.org/3/
+
+2. FastAPI
+   -> https://fastapi.tiangolo.com/
+```
+
+**2. Numbered URLs only (legacy export format).** Each line is a number and
+a URL; the URL becomes both the title and the target:
+
+```text
+1. https://example.com/docs
+2. https://example.com/dashboard
+```
+
+**3. Bare URLs.** One URL per line (`https://example.com/page`); the URL is
+also used as the title.
+
+**4. Explicit `Group:` headers.** A header line `Group: Name` (case
+insensitive) — or the `Group name: Name` spelling used by this extension's
+Copy/Export — starts a new group, and every link after it belongs to that
+group until the next header line. Headers can be combined with any of
+formats 1–3:
+
+```text
+Group: Programming
+
+1. Python Documentation
+   -> https://docs.python.org/3/
+
+Group: Engineering
+
+1. COMSOL
+   -> https://www.comsol.com/
+```
+
+Titles and URLs are kept exactly as written: long URLs, query strings,
+fragments and unusual characters are preserved verbatim; titles never have to
+match real page titles.
+
+### How group names are detected
+
+- Group names come **only** from explicit `Group:`/`Group name:` headers (or
+  group names you type in the preview). The importer never guesses a group
+  name from a URL host, a page title, or arbitrary text.
+- Multiple `Group:` headers produce one parsed group each, and each link is
+  associated with the header it appears under. Links before the first header
+  form an unnamed group.
+- If the input has links but no recognisable name, the preview shows the
+  links under an empty name field and **Import stays disabled until you type
+  a name**; every detected name is always shown in an editable field.
+
+### Import behaviour and edge cases
+
+- Nothing is opened or requested during import. Parsing and storage are pure
+  data operations; the only code that can create a tab is
+  `src/open-links.js`, invoked solely from explicit **Open** buttons and the
+  **Open all** action — never from import.
+- Repeated URLs inside one group are collapsed to the first occurrence.
+- Empty groups are skipped with a warning; a header without a name is
+  ignored with a warning; malformed lines and titles without a following URL
+  are skipped with a per-line warning.
+- Blank lines and Windows (`CRLF`) / old-Mac (`CR`) line endings are
+  tolerated; a leading UTF-8 BOM is stripped.
+- Only `http:` and `https:` URLs are accepted. `javascript:`, `data:`,
+  `file:` and other schemes are rejected with a warning, as are malformed or
+  spaced URLs. Long inputs are capped (2,000 links per import; 5,000 links /
+  500 groups stored), and storage quota failures surface as an error instead
+  of silently losing data.
+- Duplicate group names inside one input are merged (first name wins, links
+  appended, de-duplicated) with a warning.
+
+### Name conflicts with existing saved groups
+
+If any imported group name already exists among saved links, the popup shows
+**Merge into existing**, **Import as new**, and **Cancel**:
+
+- **Merge into existing** appends the new links to the existing group,
+  de-duplicated by URL; the saved group keeps its name and nothing is
+  overwritten.
+- **Import as new** stores the imported group under a fresh name such as
+  `Work (imported)` / `Work (imported 2)`; the existing group is untouched.
+- **Cancel** skips only the conflicting groups.
+
+An existing group is never silently overwritten.
+
+### Saved links panel
+
+Confirmed imports appear under **Saved links** as expandable groups with
+per-link **Open** and **Remove** buttons, an **Open all** action (with a
+confirmation dialog because those sites will load), and a **Remove group**
+button. These are saved links stored in this extension's data, **not** open
+browser tabs; the panel says so explicitly. They persist across popup
+closures and browser restarts, and are never auto-restored into tabs.
+
+### Import-related permissions
+
+`storage` is added for `chrome.storage.local`. No `clipboardRead`,
+`activeTab`, `downloads`, or host permissions were added: the **Paste**
+button uses the user-gesture-gated `navigator.clipboard.readText()` API, and
+the file picker needs no permission.
 
 ## Install in Brave (developer mode)
 
@@ -132,17 +278,30 @@ bun test          # unit + file/manifest checks
 node --check popup.js
 node --check src/groups.js
 node --check src/export.js
+node --check src/import.js
+node --check src/storage.js
+node --check src/open-links.js
 ```
 
 - `test/groups.test.js` covers grouping, ordering, URL skipping, the exact
   two-line entry format (title, then `   -> ` + URL), blank-line separation,
   long URLs, control-character handling in titles, and the virtual
   "Ungrouped Tabs" entry.
+- `test/import.test.js` covers parsing the extension's own export format,
+  the legacy numbered-URL format, bare URLs, explicit `Group:` headers,
+  unnamed-group flows, name editing inputs, blank lines, CRLF/CR endings, a
+  BOM, empty/duplicate groups, repeated URLs, long URLs with queries and
+  fragments, malformed entries, unsafe schemes, and the entry cap.
+- `test/storage.test.js` covers the saved-group model, conflict detection,
+  merge/rename/cancel policies, duplicate names, and `chrome.storage.local`
+  round-trips, malformed data and quota/IO failures.
 - `test/export.test.js` covers filename sanitization, date stamps, TXT export
   content, and that preview, clipboard, and export text are identical.
 - `test/extension-files.test.js` checks the manifest, permissions, local file
-  references, virtual group exports from `src/groups.js`, and that the runtime
-  sources contain no remote URLs.
+  references, virtual group exports from `src/groups.js`, that the runtime
+  sources contain no remote URLs, and crucially that the import and storage
+  modules never touch `chrome.tabs` — only `src/open-links.js` can create
+  tabs, and only from explicit user actions.
 
 ## Known limitations
 
@@ -160,3 +319,6 @@ node --check src/export.js
   through actual testing. Only Brave has been used as the primary target.
 - No automated browser UI test is included; popup logic is verified by reading
   and reviewing `popup.js`, not by driving Brave.
+- The clipboard **Paste** button uses `navigator.clipboard.readText()`, which
+  requires the popup to be focused and can be denied; the error message tells
+  the user to press Ctrl+V in the text area instead.
