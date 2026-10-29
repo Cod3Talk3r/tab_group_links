@@ -132,11 +132,8 @@ the preview without saving anything.
 
 Two input sources are supported:
 
-- **Paste text** — a text area where you can type or press Ctrl+V, plus an
-  explicit **Paste** button that reads the clipboard on demand
-  (`navigator.clipboard.readText()`). The clipboard is never read
-  automatically; a permission or focus failure shows an error and tells you
-  to paste manually instead.
+- **Paste text** — paste (Ctrl+V or the context menu) directly into the text
+  area. The clipboard is only ever read by you, never by the extension.
 - **.txt file** — a **Choose .txt…** button opens a file picker
   (`accept=".txt,text/plain"`). The file is read with `File.text()`, capped
   at 5&nbsp;MB. No library is used.
@@ -251,9 +248,10 @@ closures and browser restarts, and are never auto-restored into tabs.
 ### Import-related permissions
 
 `storage` is added for `chrome.storage.local`. No `clipboardRead`,
-`activeTab`, `downloads`, or host permissions were added: the **Paste**
-button uses the user-gesture-gated `navigator.clipboard.readText()` API, and
-the file picker needs no permission.
+`activeTab`, `downloads`, or host permissions are requested — `clipboardRead`
+would display Chrome's warning **"Read data you copy and paste"**. Pasting is
+done by the user directly into the text area, and the file picker needs no
+permission.
 
 ## Install in Brave (developer mode)
 
@@ -319,6 +317,5 @@ node --check src/open-links.js
   through actual testing. Only Brave has been used as the primary target.
 - No automated browser UI test is included; popup logic is verified by reading
   and reviewing `popup.js`, not by driving Brave.
-- The clipboard **Paste** button uses `navigator.clipboard.readText()`, which
-  requires the popup to be focused and can be denied; the error message tells
-  the user to press Ctrl+V in the text area instead.
+- Imported text is pasted by the user directly into the Import text area
+  (Ctrl+V or the context menu); the extension never reads the clipboard.

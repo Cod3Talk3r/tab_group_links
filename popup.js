@@ -49,7 +49,6 @@ const el = {
   // Import section
   importPanel: document.getElementById("import-panel"),
   importText: document.getElementById("import-text"),
-  importPaste: document.getElementById("import-paste"),
   importFile: document.getElementById("import-file"),
   importFileInput: document.getElementById("import-file-input"),
   importPreview: document.getElementById("import-preview"),
@@ -559,32 +558,6 @@ function refreshImportPreview() {
   renderImportPreview(parsed);
 }
 
-async function pasteFromClipboard() {
-  el.importPaste.disabled = true;
-  try {
-    const clipboard = globalThis.navigator?.clipboard;
-    if (!clipboard || typeof clipboard.readText !== "function") {
-      throw new Error("clipboard reading is not available — click into the text field and press Ctrl+V instead");
-    }
-    const text = await clipboard.readText();
-    if (!text || !text.trim()) {
-      setStatus("info", "The clipboard is empty.");
-      return;
-    }
-    el.importText.value = text;
-    refreshImportPreview();
-    el.importPanel.open = true;
-    setStatus("success", "Pasted clipboard content. Review it, then press Import.");
-  } catch (error) {
-    setStatus(
-      "error",
-      `Could not read the clipboard: ${describeError(error)}. Click into the text field and press Ctrl+V instead.`,
-    );
-  } finally {
-    el.importPaste.disabled = false;
-  }
-}
-
 async function loadImportFile(file) {
   if (!file) return;
   if (file.size > MAX_IMPORT_FILE_BYTES) {
@@ -884,10 +857,6 @@ async function handleOpenAllClick(event) {
 
 el.importText.addEventListener("input", () => {
   refreshImportPreview();
-});
-
-el.importPaste.addEventListener("click", () => {
-  void pasteFromClipboard();
 });
 
 el.importFile.addEventListener("click", () => {

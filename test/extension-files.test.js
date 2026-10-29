@@ -140,6 +140,19 @@ describe("extension files", () => {
     }
   });
 
+  test("import uses direct paste (no Paste button, no clipboard-read module)", () => {
+    const html = read("popup.html");
+    const source = read("popup.js");
+    expect(html).not.toContain('id="import-paste"');
+    expect(html).not.toContain(">Paste</button>");
+    expect(html).toContain('id="import-file"');
+    // The textarea placeholder and hint direct users to Ctrl+V or .txt.
+    expect(html).toContain("Ctrl+V");
+    expect(html).toContain("choose a .txt file");
+    expect(source).not.toContain("readClipboardText");
+    expect(source).not.toContain("clipboardErrorMessage");
+  });
+
   test("only src/open-links.js can create tabs with URLs", () => {
     const openLinks = read("src/open-links.js");
     expect(openLinks).toContain("tabs.create");

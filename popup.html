@@ -45,18 +45,17 @@
         <summary id="import-heading">Import saved links</summary>
         <div class="import-body">
           <p class="hint">
-            Paste exported text or choose a .txt file. Links are stored as data
-            only — importing never opens any website.
+            Paste links into the field below (Ctrl+V) or choose a .txt file.
+            Links are stored as data only — importing never opens any website.
           </p>
           <textarea
             id="import-text"
             rows="6"
             spellcheck="false"
             aria-label="Text to import"
-            placeholder="Paste exported text here, e.g.&#10;Group: Work&#10;&#10;1. Example&#10;   -> https://example.com/page"
+            placeholder="Paste links here with Ctrl+V (e.g. Group: Work, then one numbered title + URL per pair) or choose a .txt file"
           ></textarea>
           <div class="actions import-actions">
-            <button id="import-paste" class="secondary" type="button">Paste</button>
             <button id="import-file" class="secondary" type="button">Choose .txt…</button>
             <input id="import-file-input" type="file" accept=".txt,text/plain" hidden />
           </div>
