@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   MAX_GROUP_NAME_LENGTH,
   MAX_IMPORT_ENTRIES,
+  buildImportSummary,
   countImportEntries,
   parseImportText,
   sanitizeImportName,
@@ -514,5 +515,71 @@ describe("parseImportText — large inputs", () => {
     const { groups, warnings } = parseImportText(many.join("\n\n"));
     expect(countImportEntries(groups)).toBe(MAX_IMPORT_ENTRIES);
     expect(warnings.join("\n")).toContain(`Stopped after ${MAX_IMPORT_ENTRIES} entries`);
+  });
+});
+
+describe("buildImportSummary", () => {
+  test("reports success for a single new group", () => {
+    expect(
+      buildImportSummary({ added: [{ name: "Work", importedCount: 12 }], merged: [], skipped: [] }),
+    ).toEqual({ kind: "success", text: "Imported 12 links to “Work”." });
+  });
+
+  test("uses singular link for one imported link", () => {
+    expect(
+      buildImportSummary({ added: [{ name: "Work", importedCount: 1 }], merged: [], skipped: [] }),
+    ).toEqual({ kind: "success", text: "Imported 1 link to “Work”." });
+  });
+
+  test("reports multiple new groups without per-group noise", () => {
+    expect(
+      buildImportSummary({
+        added: [
+          { name: "Work", importedCount: 10 },
+          { name: "Reading", importedCount: 5 },
+        ],
+        merged: [],
+        skipped: [],
+      }),
+    ).toEqual({ kind: "success", text: "Imported 15 links across 2 groups." });
+  });
+
+  test("reports a merge into an existing group distinctly", () => {
+    expect(
+      buildImportSummary({ added: [], merged: [{ name: "Shop", addedCount: 3 }], skipped: [] }),
+    ).toEqual({ kind: "success", text: "Added 3 new links to “Shop”." });
+  });
+
+  test("combines new groups and merges", () => {
+    expect(
+      buildImportSummary({
+        added: [{ name: "Work", importedCount: 12 }],
+        merged: [{ name: "Shop", addedCount: 3 }],
+        skipped: [],
+      }),
+    ).toEqual({
+      kind: "success",
+      text: "Imported 12 links to “Work”. Added 3 new links to “Shop”.",
+    });
+  });
+
+  test("never reports success for zero imported links (all duplicates)", () => {
+    expect(
+      buildImportSummary({ added: [], merged: [{ name: "Shop", addedCount: 0 }], skipped: [] }),
+    ).toEqual({ kind: "info", text: "Nothing new to import — those links are already saved." });
+  });
+
+  test("handles empty results and empty inputs without claiming success", () => {
+    expect(buildImportSummary({ added: [], merged: [], skipped: [] })).toEqual({
+      kind: "info",
+      text: "Nothing to import — this text has no links.",
+    });
+    expect(buildImportSummary(null)).toEqual({ kind: "info", text: "Nothing to import — this text has no links." });
+  });
+
+  test("surfaces empty imported groups as a non-success outcome", () => {
+    expect(
+      buildImportSummary({ added: [{ name: "Work", importedCount: 0 }], merged: [], skipped: [] }),
+    ).toEqual({ kind: "info", text: "Imported groups were empty and nothing was saved." });
   });
 });

@@ -5,7 +5,7 @@ import {
   UNGROUPED_TITLE,
 } from "./src/groups.js";
 import { buildTxtExport } from "./src/export.js";
-import { countImportEntries, parseImportText } from "./src/import.js";
+import { buildImportSummary, countImportEntries, parseImportText } from "./src/import.js";
 import {
   applyImportToSavedGroups,
   findNameConflicts,
@@ -602,7 +602,7 @@ async function confirmImport() {
   }
 
   if (namedGroups.length === 0) {
-    setStatus("error", "There is nothing to import.");
+    setStatus("info", "Nothing to import — this text has no links.");
     return;
   }
 
@@ -612,10 +612,9 @@ async function confirmImport() {
     const conflicts = findNameConflicts(namedGroups, saved);
 
     if (conflicts.length > 0 && !importState.conflictPolicy) {
+      const names = conflicts.map((name) => `“${name}”`).join(", ");
       el.importConflictNote.textContent =
-        conflicts.length === 1
-          ? `You already have a saved group named “${conflicts[0]}”. Merge the new links into it, import them as a separate new group, or cancel?`
-          : `You already have saved groups named ${conflicts.map((name) => `“${name}”`).join(", ")}. Merge the new links into them, import them as separate new groups, or cancel?`;
+        `${names} ${conflicts.length === 1 ? "already exists" : "already exist"}. Choose how to import:`;
       el.importConflict.hidden = false;
       el.importConfirm.disabled = false;
       return;
@@ -625,26 +624,10 @@ async function confirmImport() {
     const result = applyImportToSavedGroups(saved, namedGroups, { policy });
     await saveSavedGroups(result.groups);
 
-    const importedTotal =
-      result.added.reduce((sum, entry) => sum + entry.importedCount, 0) +
-      result.merged.reduce((sum, entry) => sum + entry.addedCount, 0);
-    const parts = [];
-    if (result.added.length > 0) {
-      parts.push(`saved ${result.added.map((entry) => `“${entry.name}”`).join(", ")}`);
-    }
-    if (result.merged.length > 0) {
-      parts.push(`merged into ${result.merged.map((entry) => `“${entry.name}”`).join(", ")}`);
-    }
-    if (result.skipped.length > 0) {
-      parts.push(`skipped ${result.skipped.join(", ")}`);
-    }
-
+    const summary = buildImportSummary(result);
     await refreshSavedGroups();
     resetImportUI();
-    setStatus(
-      "success",
-      `Imported ${importedTotal} ${plural(importedTotal, "link")}: ${parts.join("; ")}. No website was opened — open links from “Saved links” when you want them.`,
-    );
+    setStatus(summary.kind, summary.text);
   } catch (error) {
     setStatus("error", `Import failed: ${describeError(error)}. Your saved links are unchanged.`);
     el.importConfirm.disabled = false;
@@ -880,7 +863,7 @@ el.importGroups.addEventListener("input", (event) => {
 
 el.importCancel.addEventListener("click", () => {
   resetImportUI();
-  setStatus("success", "Import cancelled. No links were opened or saved.");
+  setStatus("info", "Import cancelled.");
 });
 
 el.importConflictMerge.addEventListener("click", () => {
@@ -893,9 +876,11 @@ el.importConflictRename.addEventListener("click", () => {
   void confirmImport();
 });
 
+// The conflict-bar Cancel cancels the whole import: it must not parse,
+// validate, import, modify saved groups or open anything.
 el.importConflictCancel.addEventListener("click", () => {
-  importState.conflictPolicy = "cancel";
-  void confirmImport();
+  resetImportUI();
+  setStatus("info", "Import cancelled.");
 });
 
 el.importConfirm.addEventListener("click", () => {

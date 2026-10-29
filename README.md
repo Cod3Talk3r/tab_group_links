@@ -32,7 +32,6 @@ No external dependencies, no remote services, no icons.
 7. **Export TXT** downloads the same numbered list as a `.txt` file using a
    `Blob` and a temporary object URL, so no extra permission or third-party
    code is needed.
-8. Success and error feedback is shown in a live status region.
 
 The preview, clipboard output, and TXT export all use the **exact same**
 format: a numbered title on its own line, the URL on the next line prefixed

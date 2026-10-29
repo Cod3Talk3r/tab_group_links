@@ -153,6 +153,23 @@ describe("extension files", () => {
     expect(source).not.toContain("clipboardErrorMessage");
   });
 
+  test("import and conflict Cancel reset the UI without parsing or importing", () => {
+    const source = read("popup.js");
+    // Main Cancel: resets state, never calls confirmImport.
+    const mainBlock = source.match(/el\.importCancel\.addEventListener\("click", \(\) => \{[\s\S]*?\}\);/);
+    expect(mainBlock).not.toBeNull();
+    expect(mainBlock[0]).toContain("resetImportUI()");
+    expect(mainBlock[0]).not.toContain("confirmImport");
+    expect(mainBlock[0]).not.toContain("parseImportText");
+    // Conflict-bar Cancel cancels the whole import instead of invoking the
+    // old "skip conflicts" policy path.
+    const conflictBlock = source.match(/el\.importConflictCancel\.addEventListener\("click", \(\) => \{[\s\S]*?\}\);/);
+    expect(conflictBlock).not.toBeNull();
+    expect(conflictBlock[0]).toContain("resetImportUI()");
+    expect(conflictBlock[0]).not.toContain("confirmImport");
+    expect(conflictBlock[0]).not.toContain("applyImportToSavedGroups");
+  });
+
   test("only src/open-links.js can create tabs with URLs", () => {
     const openLinks = read("src/open-links.js");
     expect(openLinks).toContain("tabs.create");

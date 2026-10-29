@@ -303,3 +303,51 @@ export function countImportEntries(groups) {
     0,
   );
 }
+
+/**
+ * Build a concise, human summary of an import result for the status line.
+ *
+ * Never reports success for zero links: all-duplicate merges produce an
+ * `info` outcome instead. Terminology and pluralisation are consistent
+ * (links, groups, imported, added, merging).
+ *
+ * @param {{
+ *   added: Array<{ name: string, importedCount: number }>,
+ *   merged: Array<{ name: string, addedCount: number }>,
+ *   skipped: string[]
+ * }} result  shape returned by `applyImportToSavedGroups`
+ * @returns {{ kind: "success" | "info", text: string }}
+ */
+export function buildImportSummary(result) {
+  const addedList = Array.isArray(result?.added) ? result.added : [];
+  const mergedList = Array.isArray(result?.merged) ? result.merged : [];
+  const addedCount = addedList.reduce((sum, entry) => sum + (Number.isFinite(entry?.importedCount) ? entry.importedCount : 0), 0);
+  const mergedCount = mergedList.reduce((sum, entry) => sum + (Number.isFinite(entry?.addedCount) ? entry.addedCount : 0), 0);
+  const total = addedCount + mergedCount;
+
+  if (total === 0) {
+    if (mergedList.length > 0) {
+      return {
+        kind: "info",
+        text: "Nothing new to import — those links are already saved.",
+      };
+    }
+    if (addedList.length > 0) {
+      return { kind: "info", text: "Imported groups were empty and nothing was saved." };
+    }
+    return { kind: "info", text: "Nothing to import — this text has no links." };
+  }
+
+  const bits = [];
+  if (addedList.length === 1) {
+    bits.push(`Imported ${addedCount} ${addedCount === 1 ? "link" : "links"} to “${addedList[0].name}”.`);
+  } else if (addedList.length > 1) {
+    bits.push(`Imported ${addedCount} ${addedCount === 1 ? "link" : "links"} across ${addedList.length} groups.`);
+  }
+  if (mergedList.length === 1) {
+    bits.push(`Added ${mergedCount} new ${mergedCount === 1 ? "link" : "links"} to “${mergedList[0].name}”.`);
+  } else if (mergedList.length > 1) {
+    bits.push(`Added ${mergedCount} new ${mergedCount === 1 ? "link" : "links"} to ${mergedList.length} existing groups.`);
+  }
+  return { kind: "success", text: bits.join(" ") };
+}
