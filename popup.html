@@ -41,6 +41,60 @@
         </div>
       </section>
 
+      <details id="import-panel" class="panel import-panel">
+        <summary id="import-heading">Import saved links</summary>
+        <div class="import-body">
+          <p class="hint">
+            Paste exported text or choose a .txt file. Links are stored as data
+            only — importing never opens any website.
+          </p>
+          <textarea
+            id="import-text"
+            rows="6"
+            spellcheck="false"
+            aria-label="Text to import"
+            placeholder="Paste exported text here, e.g.&#10;Group: Work&#10;&#10;1. Example&#10;   -> https://example.com/page"
+          ></textarea>
+          <div class="actions import-actions">
+            <button id="import-paste" class="secondary" type="button">Paste</button>
+            <button id="import-file" class="secondary" type="button">Choose .txt…</button>
+            <input id="import-file-input" type="file" accept=".txt,text/plain" hidden />
+          </div>
+
+          <div id="import-preview" hidden>
+            <p id="import-meta" class="meta import-meta"></p>
+            <div id="import-groups"></div>
+            <p id="import-warnings" class="note import-warnings" hidden></p>
+            <div id="import-conflict" class="import-conflict" hidden>
+              <p id="import-conflict-note" class="note"></p>
+              <div class="actions">
+                <button id="import-conflict-merge" class="secondary action-secondary" type="button">Merge into existing</button>
+                <button id="import-conflict-rename" class="secondary action-secondary" type="button">Import as new</button>
+                <button id="import-conflict-cancel" class="secondary action-secondary" type="button">Cancel</button>
+              </div>
+            </div>
+            <div class="actions">
+              <button id="import-confirm" class="primary" type="button" disabled>Import</button>
+              <button id="import-cancel" class="secondary action-secondary" type="button">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <section class="panel" aria-labelledby="saved-heading">
+        <div class="preview-head">
+          <h2 id="saved-heading">Saved links</h2>
+          <p id="saved-meta" class="meta"></p>
+        </div>
+        <p class="hint">
+          Stored in this extension's data — these are saved links, not open
+          browser tabs. Opening is always explicit.
+          <button id="open-all-btn" type="button" class="mini-btn">Open all</button>
+        </p>
+        <ul id="saved-list" class="saved-list"></ul>
+        <p id="saved-empty" class="empty-state">No saved links yet. Import some above.</p>
+      </section>
+
       <p id="status" class="status" role="status" aria-live="polite" hidden></p>
     </main>
 

@@ -5,6 +5,15 @@ import {
   UNGROUPED_TITLE,
 } from "./src/groups.js";
 import { buildTxtExport } from "./src/export.js";
+import { countImportEntries, parseImportText } from "./src/import.js";
+import {
+  applyImportToSavedGroups,
+  findNameConflicts,
+  loadSavedGroups,
+  sanitizeSavedGroupName,
+  saveSavedGroups,
+} from "./src/storage.js";
+import { openLinkInBackground, openLinksInBackground } from "./src/open-links.js";
 
 const GROUP_COLORS = {
   grey: "#8a94a6",
@@ -36,6 +45,29 @@ const el = {
   exportTxt: document.getElementById("export-txt"),
   status: document.getElementById("status"),
   refresh: document.getElementById("refresh"),
+
+  // Import section
+  importPanel: document.getElementById("import-panel"),
+  importText: document.getElementById("import-text"),
+  importPaste: document.getElementById("import-paste"),
+  importFile: document.getElementById("import-file"),
+  importFileInput: document.getElementById("import-file-input"),
+  importPreview: document.getElementById("import-preview"),
+  importMeta: document.getElementById("import-meta"),
+  importGroups: document.getElementById("import-groups"),
+  importWarnings: document.getElementById("import-warnings"),
+  importConflict: document.getElementById("import-conflict"),
+  importConflictNote: document.getElementById("import-conflict-note"),
+  importConflictMerge: document.getElementById("import-conflict-merge"),
+  importConflictRename: document.getElementById("import-conflict-rename"),
+  importConflictCancel: document.getElementById("import-conflict-cancel"),
+  importConfirm: document.getElementById("import-confirm"),
+  importCancel: document.getElementById("import-cancel"),
+
+  // Saved links section
+  savedList: document.getElementById("saved-list"),
+  savedEmpty: document.getElementById("saved-empty"),
+  savedMeta: document.getElementById("saved-meta"),
 };
 
 const defaultGroupsEmptyText = el.groupsEmpty.textContent.trim();
@@ -154,18 +186,24 @@ function renderPreview() {
   el.previewMeta.textContent =
     urlCount === 0 ? "0 URLs" : `${urlCount} numbered ${plural(urlCount, "URL")}`;
 
-  const lines = group.formattedLines;
+  const lines =
+    group.formattedText.length > 0
+      ? group.formattedText.split("\n\n")
+      : group.formattedLines;
   const fragment = document.createDocumentFragment();
-  group.entries.forEach((_entry, position) => {
+  lines.forEach((line, position) => {
     const item = document.createElement("li");
     item.className = "preview-item";
+    if (position === 0 && group.hasTitle) {
+      item.classList.add("preview-item--header");
+    }
 
     const body = document.createElement("span");
     body.className = "tab-body";
 
     const code = document.createElement("code");
     code.className = "tab-url";
-    code.textContent = lines[position] ?? "";
+    code.textContent = line ?? "";
 
     body.append(code);
     item.append(body);
@@ -397,4 +435,524 @@ el.exportTxt.addEventListener("click", () => {
   exportSelected();
 });
 
+/* ── Import: saved links ─────────────────────────────────────────────
+ *
+ * Importing never opens a website: parsed links are only previewed in the
+ * DOM and, after confirmation, written to chrome.storage.local. The only
+ * code that can turn a link into a tab is src/open-links.js, called from
+ * explicit "Open" buttons below.
+ */
+
+const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
+
+const importState = {
+  /** @type {{ groups: Array<{ name: string | null, entries: Array<{ title: string, url: string }> }>, warnings: string[] } | null} */
+  parsed: null,
+  /** Conflict policy chosen by the user for name collisions, or null. */
+  conflictPolicy: null,
+};
+
+function resetImportUI() {
+  importState.parsed = null;
+  importState.conflictPolicy = null;
+  el.importText.value = "";
+  el.importPreview.hidden = true;
+  el.importConflict.hidden = true;
+  el.importGroups.replaceChildren();
+  el.importWarnings.hidden = true;
+  el.importWarnings.textContent = "";
+  el.importConfirm.disabled = true;
+}
+
+function readEditedGroupNames() {
+  return importState.parsed.groups.map((group, index) => {
+    const input = el.importGroups.querySelector(`input[data-group-index="${index}"]`);
+    return sanitizeSavedGroupName(input instanceof HTMLInputElement ? input.value : "");
+  });
+}
+
+function renderImportPreview(parsed) {
+  el.importGroups.replaceChildren();
+  el.importConflict.hidden = true;
+  importState.conflictPolicy = null;
+
+  const total = countImportEntries(parsed.groups);
+  const fragment = document.createDocumentFragment();
+
+  parsed.groups.forEach((group, index) => {
+    const item = document.createElement("div");
+    item.className = "import-group";
+
+    const head = document.createElement("div");
+    head.className = "import-group-head";
+
+    const label = document.createElement("label");
+    label.textContent = "Group name";
+    label.setAttribute("for", `import-group-name-${index}`);
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.id = `import-group-name-${index}`;
+    nameInput.className = "import-group-name";
+    nameInput.dataset.groupIndex = String(index);
+    nameInput.value = group.name ?? "";
+    nameInput.placeholder = "Group name (required)";
+    nameInput.setAttribute("aria-invalid", group.name ? "false" : "true");
+    nameInput.maxLength = 200;
+
+    const count = document.createElement("span");
+    count.className = "import-group-count";
+    count.textContent = `${group.entries.length} ${plural(group.entries.length, "link")}`;
+
+    head.append(label, nameInput, count);
+
+    const list = document.createElement("ol");
+    list.className = "import-entries";
+    for (const entry of group.entries) {
+      const li = document.createElement("li");
+      li.className = "import-entry";
+      const title = document.createElement("span");
+      title.className = "import-entry-title";
+      title.textContent = entry.title || entry.url;
+      const url = document.createElement("code");
+      url.className = "import-entry-url";
+      url.textContent = entry.url;
+      li.append(title, url);
+      list.append(li);
+    }
+
+    item.append(head, list);
+    fragment.append(item);
+  });
+
+  el.importGroups.append(fragment);
+  el.importMeta.textContent =
+    total === 0
+      ? "No importable links found."
+      : `${parsed.groups.length} ${plural(parsed.groups.length, "group")} · ${total} ${plural(total, "link")} · nothing will be opened`;
+
+  if (parsed.warnings.length > 0) {
+    el.importWarnings.hidden = false;
+    el.importWarnings.replaceChildren();
+    for (const warning of parsed.warnings) {
+      const line = document.createElement("div");
+      line.textContent = warning;
+      el.importWarnings.append(line);
+    }
+  } else {
+    el.importWarnings.hidden = true;
+    el.importWarnings.replaceChildren();
+  }
+
+  el.importPreview.hidden = false;
+  el.importConfirm.disabled = total === 0;
+}
+
+function refreshImportPreview() {
+  const text = el.importText.value;
+  if (!text.trim()) {
+    resetImportUI();
+    return;
+  }
+  const parsed = parseImportText(text);
+  importState.parsed = parsed;
+  renderImportPreview(parsed);
+}
+
+async function pasteFromClipboard() {
+  el.importPaste.disabled = true;
+  try {
+    const clipboard = globalThis.navigator?.clipboard;
+    if (!clipboard || typeof clipboard.readText !== "function") {
+      throw new Error("clipboard reading is not available — click into the text field and press Ctrl+V instead");
+    }
+    const text = await clipboard.readText();
+    if (!text || !text.trim()) {
+      setStatus("info", "The clipboard is empty.");
+      return;
+    }
+    el.importText.value = text;
+    refreshImportPreview();
+    el.importPanel.open = true;
+    setStatus("success", "Pasted clipboard content. Review it, then press Import.");
+  } catch (error) {
+    setStatus(
+      "error",
+      `Could not read the clipboard: ${describeError(error)}. Click into the text field and press Ctrl+V instead.`,
+    );
+  } finally {
+    el.importPaste.disabled = false;
+  }
+}
+
+async function loadImportFile(file) {
+  if (!file) return;
+  if (file.size > MAX_IMPORT_FILE_BYTES) {
+    setStatus("error", `“${file.name}” is too large (max 5 MB).`);
+    return;
+  }
+  el.importFile.disabled = true;
+  try {
+    const text = await file.text();
+    el.importText.value = text;
+    refreshImportPreview();
+    el.importPanel.open = true;
+    if (!text.trim()) {
+      setStatus("info", `“${file.name}” is empty.`);
+    } else {
+      setStatus("success", `Loaded “${file.name}”. Review the preview, then press Import.`);
+    }
+  } catch (error) {
+    setStatus("error", `Could not read “${file.name}”: ${describeError(error)}.`);
+  } finally {
+    el.importFile.disabled = false;
+  }
+}
+
+async function confirmImport() {
+  if (!importState.parsed) return;
+
+  const names = readEditedGroupNames();
+  const namedGroups = [];
+  for (let index = 0; index < importState.parsed.groups.length; index += 1) {
+    const name = names[index];
+    if (!name) {
+      setStatus("error", "Enter a name for every group before importing.");
+      const input = el.importGroups.querySelector(`input[data-group-index="${index}"]`);
+      if (input instanceof HTMLInputElement) {
+        input.setAttribute("aria-invalid", "true");
+        input.focus();
+      }
+      return;
+    }
+    namedGroups.push({ name, entries: importState.parsed.groups[index].entries });
+  }
+
+  if (namedGroups.length === 0) {
+    setStatus("error", "There is nothing to import.");
+    return;
+  }
+
+  el.importConfirm.disabled = true;
+  try {
+    const saved = await loadSavedGroups();
+    const conflicts = findNameConflicts(namedGroups, saved);
+
+    if (conflicts.length > 0 && !importState.conflictPolicy) {
+      el.importConflictNote.textContent =
+        conflicts.length === 1
+          ? `You already have a saved group named “${conflicts[0]}”. Merge the new links into it, import them as a separate new group, or cancel?`
+          : `You already have saved groups named ${conflicts.map((name) => `“${name}”`).join(", ")}. Merge the new links into them, import them as separate new groups, or cancel?`;
+      el.importConflict.hidden = false;
+      el.importConfirm.disabled = false;
+      return;
+    }
+
+    const policy = conflicts.length > 0 ? importState.conflictPolicy : "merge";
+    const result = applyImportToSavedGroups(saved, namedGroups, { policy });
+    await saveSavedGroups(result.groups);
+
+    const importedTotal =
+      result.added.reduce((sum, entry) => sum + entry.importedCount, 0) +
+      result.merged.reduce((sum, entry) => sum + entry.addedCount, 0);
+    const parts = [];
+    if (result.added.length > 0) {
+      parts.push(`saved ${result.added.map((entry) => `“${entry.name}”`).join(", ")}`);
+    }
+    if (result.merged.length > 0) {
+      parts.push(`merged into ${result.merged.map((entry) => `“${entry.name}”`).join(", ")}`);
+    }
+    if (result.skipped.length > 0) {
+      parts.push(`skipped ${result.skipped.join(", ")}`);
+    }
+
+    await refreshSavedGroups();
+    resetImportUI();
+    setStatus(
+      "success",
+      `Imported ${importedTotal} ${plural(importedTotal, "link")}: ${parts.join("; ")}. No website was opened — open links from “Saved links” when you want them.`,
+    );
+  } catch (error) {
+    setStatus("error", `Import failed: ${describeError(error)}. Your saved links are unchanged.`);
+    el.importConfirm.disabled = false;
+  }
+}
+
+async function refreshSavedGroups() {
+  try {
+    const saved = await loadSavedGroups();
+    renderSavedGroups(saved);
+    el.savedEmpty.hidden = saved.length > 0;
+    el.savedMeta.textContent = `${saved.length} ${plural(saved.length, "group")} stored in this extension`;
+    el.savedList.hidden = saved.length === 0;
+  } catch (error) {
+    el.savedEmpty.hidden = false;
+    el.savedEmpty.textContent = `Could not load saved links: ${describeError(error)}`;
+    el.savedMeta.textContent = "";
+    el.savedList.hidden = true;
+  }
+}
+
+function renderSavedGroups(saved) {
+  const fragment = document.createDocumentFragment();
+  for (const group of saved) {
+    const li = document.createElement("li");
+    li.className = "saved-group";
+    li.dataset.groupId = group.id;
+
+    const head = document.createElement("div");
+    head.className = "saved-head";
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "saved-toggle";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-controls", `saved-detail-${group.id}`);
+
+    const caret = document.createElement("span");
+    caret.className = "saved-caret";
+    caret.setAttribute("aria-hidden", "true");
+    caret.textContent = "▸";
+
+    const name = document.createElement("span");
+    name.className = "saved-name";
+    name.textContent = group.name || "Untitled";
+
+    const count = document.createElement("span");
+    count.className = "saved-count";
+    count.textContent = `${group.entries.length} ${plural(group.entries.length, "link")}`;
+
+    toggle.append(caret, name, count);
+
+    const detail = document.createElement("div");
+    detail.className = "saved-detail";
+    detail.id = `saved-detail-${group.id}`;
+    detail.hidden = true;
+
+    const ol = document.createElement("ol");
+    ol.className = "saved-entries";
+    for (const [entryIndex, entry] of group.entries.entries()) {
+      const entryLi = document.createElement("li");
+      entryLi.className = "saved-entry";
+
+      const textPart = document.createElement("div");
+      textPart.className = "saved-entry-text";
+      const entryTitle = document.createElement("span");
+      entryTitle.className = "import-entry-title";
+      entryTitle.textContent = entry.title || entry.url;
+      const entryUrl = document.createElement("code");
+      entryUrl.className = "import-entry-url";
+      entryUrl.textContent = entry.url;
+      textPart.append(entryTitle, entryUrl);
+
+      const actionPart = document.createElement("div");
+      actionPart.className = "saved-entry-actions";
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.className = "mini-btn";
+      openButton.textContent = "Open";
+      openButton.title = "Open this link in a new background tab (the site will load)";
+      openButton.dataset.action = "open";
+      openButton.dataset.groupId = group.id;
+      openButton.dataset.entryIndex = String(entryIndex);
+
+      const removeButton = document.createElement("button");
+      removeButton.type = "button";
+      removeButton.className = "mini-btn mini-btn--danger";
+      removeButton.textContent = "Remove";
+      removeButton.title = "Remove this link from the saved group";
+      removeButton.dataset.action = "remove";
+      removeButton.dataset.groupId = group.id;
+      removeButton.dataset.entryIndex = String(entryIndex);
+
+      actionPart.append(openButton, removeButton);
+      entryLi.append(textPart, actionPart);
+      ol.append(entryLi);
+    }
+
+    const headActions = document.createElement("div");
+    headActions.className = "saved-entry-actions";
+    const removeAllButton = document.createElement("button");
+    removeAllButton.type = "button";
+    removeAllButton.className = "mini-btn mini-btn--danger";
+    removeAllButton.textContent = "Remove group";
+    removeAllButton.title = "Remove this whole saved group (links are not opened)";
+    removeAllButton.dataset.action = "remove-group";
+    removeAllButton.dataset.groupId = group.id;
+    headActions.append(removeAllButton);
+
+    head.append(toggle, headActions);
+    detail.append(ol);
+    li.append(head, detail);
+    fragment.append(li);
+  }
+  el.savedList.replaceChildren(fragment);
+}
+
+async function handleSavedClick(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const toggle = target.closest(".saved-toggle");
+  if (toggle) {
+    const li = toggle.closest(".saved-group");
+    const detail = li?.querySelector(".saved-detail");
+    if (!(detail instanceof HTMLElement)) return;
+    const expanded = detail.hidden;
+    detail.hidden = !expanded;
+    toggle.setAttribute("aria-expanded", String(expanded));
+    return;
+  }
+
+  const actionButton = target.closest("button[data-action]");
+  if (!actionButton) return;
+  const action = actionButton.dataset.action;
+  const groupId = actionButton.dataset.groupId;
+  const entryIndex = Number(actionButton.dataset.entryIndex);
+
+  try {
+    const saved = await loadSavedGroups();
+    if (action === "open") {
+      const entry = saved.find((group) => group.id === groupId)?.entries?.[entryIndex];
+      if (!entry) {
+        setStatus("error", "That link no longer exists — refresh the list.");
+        return;
+      }
+      try {
+        await openLinkInBackground(entry.url);
+        setStatus("success", `Opened “${entry.title || entry.url}” in a new background tab.`);
+      } catch (error) {
+        setStatus("error", `Could not open the link: ${describeError(error)}`);
+      }
+      return;
+    }
+
+    if (action === "remove") {
+      const group = saved.find((item) => item.id === groupId);
+      if (!group) {
+        setStatus("error", "That group no longer exists — refresh the list.");
+        return;
+      }
+      if (entryIndex >= 0 && entryIndex < group.entries.length) {
+        group.entries.splice(entryIndex, 1);
+        await saveSavedGroups(saved);
+        await refreshSavedGroups();
+        setStatus("success", "Link removed.");
+      }
+      return;
+    }
+
+    if (action === "remove-group") {
+      const index = saved.findIndex((item) => item.id === groupId);
+      if (index < 0) {
+        setStatus("error", "That group no longer exists — refresh the list.");
+        return;
+      }
+      if (!window.confirm(`Remove the saved group and all its links? No website will be opened.`)) {
+        return;
+      }
+      saved.splice(index, 1);
+      await saveSavedGroups(saved);
+      await refreshSavedGroups();
+      setStatus("success", "Saved group removed. No website was opened.");
+    }
+  } catch (error) {
+    setStatus("error", `Could not update saved links: ${describeError(error)}`);
+  }
+}
+
+async function handleOpenAllClick(event) {
+  const button = event.target;
+  if (!(button instanceof Element) || !button.closest("#open-all-btn")) return;
+  const saved = await loadSavedGroups();
+  const total = saved.reduce((sum, group) => sum + group.entries.length, 0);
+  if (total === 0) {
+    setStatus("info", "There are no saved links to open.");
+    return;
+  }
+  const confirmed = window.confirm(
+    `Open all ${total} saved ${plural(total, "link")} in new background tabs? These sites will load normally.`,
+  );
+  if (!confirmed) return;
+  try {
+    const opened = await openLinksInBackground(saved.flatMap((group) => group.entries.map((entry) => entry.url)));
+    setStatus("success", `Opened ${opened} ${plural(opened, "link")} in new background tabs.`);
+  } catch (error) {
+    setStatus("error", `Could not open the links: ${describeError(error)}`);
+  }
+}
+
+el.importText.addEventListener("input", () => {
+  refreshImportPreview();
+});
+
+el.importPaste.addEventListener("click", () => {
+  void pasteFromClipboard();
+});
+
+el.importFile.addEventListener("click", () => {
+  el.importFileInput.click();
+});
+
+el.importFileInput.addEventListener("change", () => {
+  const file = el.importFileInput.files?.[0] ?? null;
+  el.importFileInput.value = "";
+  void loadImportFile(file);
+});
+
+el.importGroups.addEventListener("input", (event) => {
+  const target = event.target;
+  if (target instanceof HTMLInputElement && target.classList.contains("import-group-name")) {
+    const invalid = target.value.trim().length === 0;
+    target.setAttribute("aria-invalid", String(invalid));
+    el.importConfirm.disabled = importState.parsed ? countImportEntries(importState.parsed.groups) === 0 : true;
+  }
+});
+
+el.importCancel.addEventListener("click", () => {
+  resetImportUI();
+  setStatus("success", "Import cancelled. No links were opened or saved.");
+});
+
+el.importConflictMerge.addEventListener("click", () => {
+  importState.conflictPolicy = "merge";
+  void confirmImport();
+});
+
+el.importConflictRename.addEventListener("click", () => {
+  importState.conflictPolicy = "rename";
+  void confirmImport();
+});
+
+el.importConflictCancel.addEventListener("click", () => {
+  importState.conflictPolicy = "cancel";
+  void confirmImport();
+});
+
+el.importConfirm.addEventListener("click", () => {
+  void confirmImport();
+});
+
+el.savedList.addEventListener("click", (event) => {
+  void handleSavedClick(event);
+});
+
+el.savedList.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    const target = event.target;
+    if (target instanceof Element && target.classList.contains("saved-toggle")) {
+      event.preventDefault();
+      target.click();
+    }
+  }
+});
+
+const openAllButtonElement = document.getElementById("open-all-btn");
+if (openAllButtonElement) {
+  openAllButtonElement.addEventListener("click", (event) => {
+    void handleOpenAllClick(event);
+  });
+}
+
 void loadGroups();
+void refreshSavedGroups();
