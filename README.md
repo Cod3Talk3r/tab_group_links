@@ -274,7 +274,7 @@ permission.
 2. Enable **Developer mode** (top right).
 3. Click **Load unpacked**.
 4. Select this project folder
-   (`/mnt/g/Cources/JScript/brave-tab-group-links`).
+   (`YOUR/CLONE/ADDRESS/brave-tab-group-links`).
 5. Pin **Tab Group Links** from the extensions (puzzle piece) menu.
 6. Open the popup on a window that has tab groups.
 
