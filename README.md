@@ -5,10 +5,13 @@ window (plus a virtual **Ungrouped Tabs** entry), previews their numbered tab
 titles and URLs, and copies or exports every tab in a group as a numbered
 plain-text list, in the original tab order.
 
-**Primary target:** Brave. **Expected-compatible:** Chrome, Edge (both support
-Manifest V3, the `chrome.tabGroups` API, and `navigator.clipboard` / Blob
-downloads). Compatibility with Chrome has **not** been verified through
-real-browser testing.
+**Browser compatibility**
+
+- **Brave:** Primary target; tested and working.
+- **Microsoft Edge:** Tested and working.
+- **Google Chrome:** Expected to be compatible, but not yet verified through real-browser testing.
+
+The extension uses Chromium's Manifest V3 APIs, including `chrome.tabs` and `chrome.tabGroups`.
 
 No external dependencies, no remote services, no icons.
 
@@ -47,7 +50,7 @@ No external dependencies, no remote services, no icons.
 
 The preview, clipboard output, and TXT export all use the **exact same**
 format: a numbered title on its own line, the URL on the next line prefixed
-with `   -> ` (three spaces and an arrow), and one blank line between
+with ` -> ` (three spaces and an arrow), and one blank line between
 consecutive entries. When the selected links belong to a **named** Chrome
 tab group, the text starts with that group's name on a `Group name: <name>`
 line, followed by one blank line:
@@ -79,7 +82,7 @@ Details of the format:
 - The title is the actual `tab.title` reported by the browser (trimmed) and is
   kept — titles are never dropped from the output.
 - The URL follows on its own line, prefixed with exactly three spaces and
-  `-> `. URLs are never truncated, shortened, escaped, or otherwise modified,
+  `->`. URLs are never truncated, shortened, escaped, or otherwise modified,
   so a long URL stays complete and occupies a single logical line (the popup
   preview may visually wrap it, but the generated text does not).
 - Exactly one blank line separates consecutive entries. There is no leading or
@@ -90,7 +93,7 @@ Details of the format:
   single space, so one tab always produces exactly two output lines (title,
   then URL).
 - Titles that themselves contain `->` are passed through unchanged; only the
-  literal `   -> ` prefix inserted in front of the URL is significant.
+  literal ` -> ` prefix inserted in front of the URL is significant.
 
 The export filename is descriptive and date-stamped, e.g.
 `tab-group-Work-2026-10-29.txt` or `tab-group-Ungrouped-Tabs-2026-10-29.txt`.
@@ -156,7 +159,7 @@ compatibility target; formats 2–4 are accepted as conveniences, and any
 subset can be mixed in one input.
 
 **1. Title + indented URL (the export format).** A numbered title on one
-line and its URL on the next line prefixed with `   -> ` (three spaces and an
+line and its URL on the next line prefixed with ` -> ` (three spaces and an
 arrow), blocks separated by blank lines. The written numbers are ignored;
 line order is kept:
 
@@ -281,6 +284,17 @@ permission.
 After editing files, press the reload button on the extension card in
 `brave://extensions` and reopen the popup.
 
+## Install in Microsoft Edge (developer mode)
+
+1. Open `edge://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked**.
+4. Select the cloned project folder.
+5. Pin Tab Group Links from the Extensions menu.
+6. Open the extension popup in a window containing tab groups.
+
+After editing files, click the Reload button on the extension card and reopen the popup.
+
 ## Development / tests
 
 The extension itself loads the plain files in this folder. Bun and Node are
@@ -297,7 +311,7 @@ node --check src/open-links.js
 ```
 
 - `test/groups.test.js` covers grouping, ordering, URL skipping, the exact
-  two-line entry format (title, then `   -> ` + URL), blank-line separation,
+  two-line entry format (title, then ` -> ` + URL), blank-line separation,
   long URLs, control-character handling in titles, and the virtual
   "Ungrouped Tabs" entry.
 - `test/import.test.js` covers parsing the extension's own export format,
@@ -328,8 +342,8 @@ node --check src/open-links.js
   extension does not receive a completion event, so it reports that the download
   has started, not that the file was saved. Browser settings or policies may
   still block or ask where to save the download.
-- Compatibility with Chrome and Edge is expected but has not been verified
-  through actual testing. Only Brave has been used as the primary target.
+- Google Chrome compatibility is expected but has not yet been verified through actual browser testing.
+  Brave and Microsoft Edge have both been tested successfully.
 - No automated browser UI test is included; popup logic is verified by reading
   and reviewing `popup.js`, not by driving Brave.
 - Imported text is pasted by the user directly into the Import text area
