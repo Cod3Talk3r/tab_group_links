@@ -231,8 +231,10 @@ If any imported group name already exists among saved links, the popup shows
 - **Merge into existing** appends the new links to the existing group,
   de-duplicated by URL; the saved group keeps its name and nothing is
   overwritten.
-- **Import as new** stores the imported group under a fresh name such as
-  `Work (imported)` / `Work (imported 2)`; the existing group is untouched.
+- **Import as new** stores the imported group under the next free numeric
+  name: `Work (2)`, then `Work (3)` while those names are taken; existing
+  names that already carry a numeric suffix count as taken, and an unused
+  name is always kept unchanged. The existing group is untouched.
 - **Cancel** skips only the conflicting groups.
 
 An existing group is never silently overwritten.

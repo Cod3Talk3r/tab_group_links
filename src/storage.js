@@ -122,7 +122,11 @@ export function findNameConflicts(importedGroups, savedGroups) {
 
 /**
  * Build a variant of `name` that does not collide with any saved group or with
- * the other imported names, e.g. "Work" -> "Work (imported)" -> "Work (imported 2)".
+ * the other imported names. A conflicting name gets the next free numeric
+ * suffix, e.g. "Games" -> "Games (2)" -> "Games (3)" while those are taken.
+ * Existing names that already carry a numeric suffix are compared with the
+ * same rules, so a saved "Games (2)" counts as taken. The original name is
+ * returned unchanged when there is no conflict.
  * @param {unknown} name
  * @param {Array<object>} savedGroups
  * @param {Set<string>} takenKeys  keys already claimed by earlier renames
@@ -130,18 +134,24 @@ export function findNameConflicts(importedGroups, savedGroups) {
  */
 export function buildUniqueGroupName(name, savedGroups, takenKeys = new Set()) {
   const base = sanitizeSavedGroupName(name) || "Imported";
-  const candidates = [base, `${base} (imported)`];
-  for (let suffix = 2; suffix < 1000; suffix += 1) {
-    candidates.push(`${base} (imported ${suffix})`);
-  }
-  for (const candidate of candidates) {
+  const isTaken = (candidate) => {
     const key = nameKey(candidate);
-    if (!findSavedGroupByName(savedGroups, candidate) && !takenKeys.has(key)) {
-      takenKeys.add(key);
+    return findSavedGroupByName(savedGroups, candidate) !== null || takenKeys.has(key);
+  };
+  if (!isTaken(base)) {
+    takenKeys.add(nameKey(base));
+    return base;
+  }
+  // Deterministic next-free-suffix search. The upper bound is never reached in
+  // practice; it only keeps the fallback deterministic and loop-bounded.
+  for (let suffix = 2; suffix <= 10000; suffix += 1) {
+    const candidate = `${base} (${suffix})`;
+    if (!isTaken(candidate)) {
+      takenKeys.add(nameKey(candidate));
       return candidate;
     }
   }
-  return `${base} (imported ${Date.now()})`;
+  return `${base} (10001)`;
 }
 
 /**
@@ -175,7 +185,7 @@ export function mergeEntriesIntoGroup(group, entries) {
  * - `policy: "merge"`   — links are appended to the existing group (URLs are
  *   de-duplicated); the existing group keeps its name.
  * - `policy: "rename"`  — the imported group is stored under a fresh,
- *   non-colliding name ("Work (imported)").
+ *   non-colliding name ("Work (2)" when "Work" is taken).
  * - `policy: "cancel"`  — conflicting groups are skipped entirely.
  * Groups without a conflict are always imported.
  *

@@ -128,12 +128,41 @@ describe("conflict helpers", () => {
     expect(group.entries).toHaveLength(2);
   });
 
-  test("buildUniqueGroupName avoids saved and taken names", () => {
+  test("buildUniqueGroupName picks the next free numeric suffix", () => {
     const saved = [buildSavedGroup("Work", entries, "id-1")];
-    expect(buildUniqueGroupName("Work", saved)).toBe("Work (imported)");
-    const taken = new Set([nameKey("Work (imported)")]);
-    expect(buildUniqueGroupName("Work", saved, taken)).toBe("Work (imported 2)");
+    expect(buildUniqueGroupName("Work", saved)).toBe("Work (2)");
+    const taken = new Set([nameKey("Work (2)")]);
+    expect(buildUniqueGroupName("Work", saved, taken)).toBe("Work (3)");
     expect(buildUniqueGroupName("", saved)).toBe("Imported");
+  });
+
+  test("buildUniqueGroupName skips numeric suffixes that already exist", () => {
+    const saved = [
+      buildSavedGroup("Games", entries, "id-1"),
+      buildSavedGroup("Games (2)", entries, "id-2"),
+      buildSavedGroup("Games (3)", entries, "id-3"),
+    ];
+    expect(buildUniqueGroupName("Games", saved)).toBe("Games (4)");
+  });
+
+  test("buildUniqueGroupName leaves an unused name unchanged", () => {
+    const saved = [buildSavedGroup("Games", entries, "id-1")];
+    expect(buildUniqueGroupName("Work", saved)).toBe("Work");
+    // A name that already ends in a suffix is also reused verbatim when free.
+    expect(buildUniqueGroupName("Games (2)", saved)).toBe("Games (2)");
+  });
+
+  test("buildUniqueGroupName matches conflicts case-insensitively", () => {
+    const saved = [buildSavedGroup("GAMES", entries, "id-1"), buildSavedGroup("games (2)", entries, "id-2")];
+    expect(buildUniqueGroupName("Games", saved)).toBe("Games (3)");
+  });
+
+  test("buildUniqueGroupName is deterministic", () => {
+    const saved = [buildSavedGroup("Work", entries, "id-1")];
+    const first = buildUniqueGroupName("Work", saved);
+    const second = buildUniqueGroupName("Work", saved);
+    expect(first).toBe(second);
+    expect(first).toBe("Work (2)");
   });
 });
 
@@ -168,7 +197,7 @@ describe("applyImportToSavedGroups", () => {
     const { groups } = applyImportToSavedGroups(saved, imported, { policy: "rename" });
     const names = groups.map((group) => group.name);
     expect(names).toContain("Work"); // untouched original
-    expect(names).toContain("Work (imported)");
+    expect(names).toContain("Work (2)");
     const original = groups.find((group) => group.name === "Work");
     expect(original.entries).toHaveLength(1); // never overwritten
   });
