@@ -1,10 +1,11 @@
 import {
   buildTabGroupList,
   buildUngroupedEntry,
+  formatGroupHeaderLine,
   UNGROUPED_GROUP_ID,
   UNGROUPED_TITLE,
 } from "./src/groups.js";
-import { buildTxtExport } from "./src/export.js";
+import { buildTxtExport, savedGroupNameFor } from "./src/export.js";
 import { buildImportSummary, countImportEntries, parseImportText } from "./src/import.js";
 import {
   applyImportToSavedGroups,
@@ -38,9 +39,17 @@ const el = {
   groupsEmpty: document.getElementById("groups-empty"),
   preview: document.getElementById("preview"),
   previewMeta: document.getElementById("preview-meta"),
+  previewHeader: document.getElementById("preview-header"),
   previewList: document.getElementById("preview-list"),
   previewEmpty: document.getElementById("preview-empty"),
   previewNote: document.getElementById("preview-note"),
+  saveSaved: document.getElementById("save-saved"),
+  saveConflict: document.getElementById("save-conflict"),
+  saveConflictNote: document.getElementById("save-conflict-note"),
+  saveConflictMerge: document.getElementById("save-conflict-merge"),
+  saveConflictRename: document.getElementById("save-conflict-rename"),
+  saveConflictCancel: document.getElementById("save-conflict-cancel"),
+  saveStatus: document.getElementById("save-status"),
   copy: document.getElementById("copy"),
   exportTxt: document.getElementById("export-txt"),
   status: document.getElementById("status"),
@@ -52,6 +61,7 @@ const el = {
   importFile: document.getElementById("import-file"),
   importFileInput: document.getElementById("import-file-input"),
   importPreview: document.getElementById("import-preview"),
+  importStatus: document.getElementById("import-status"),
   importMeta: document.getElementById("import-meta"),
   importGroups: document.getElementById("import-groups"),
   importWarnings: document.getElementById("import-warnings"),
@@ -61,7 +71,6 @@ const el = {
   importConflictRename: document.getElementById("import-conflict-rename"),
   importConflictCancel: document.getElementById("import-conflict-cancel"),
   importConfirm: document.getElementById("import-confirm"),
-  importCancel: document.getElementById("import-cancel"),
 
   // Saved links section
   savedList: document.getElementById("saved-list"),
@@ -118,6 +127,34 @@ function clearStatus() {
   el.status.hidden = true;
   el.status.className = "status";
   el.status.textContent = "";
+}
+
+/* Section-scoped feedback: Save messages go to the preview (Save) section,
+ * Import messages to the Import panel. The shared #status region is only
+ * for general popup messages (copy, export, open, load errors). */
+
+function setSaveStatus(kind, message) {
+  el.saveStatus.hidden = false;
+  el.saveStatus.className = `status status--${kind}`;
+  el.saveStatus.textContent = message;
+}
+
+function clearSaveStatus() {
+  el.saveStatus.hidden = true;
+  el.saveStatus.className = "status";
+  el.saveStatus.textContent = "";
+}
+
+function setImportStatus(kind, message) {
+  el.importStatus.hidden = false;
+  el.importStatus.className = `status status--${kind}`;
+  el.importStatus.textContent = message;
+}
+
+function clearImportStatus() {
+  el.importStatus.hidden = true;
+  el.importStatus.className = "status";
+  el.importStatus.textContent = "";
 }
 
 function selectGroup(id) {
@@ -177,35 +214,37 @@ function renderPreview() {
   const group = selectedGroup();
   if (!group) {
     el.preview.hidden = true;
+    hideSaveConflict();
+    clearSaveStatus();
     return;
   }
 
+  hideSaveConflict();
+  clearSaveStatus();
   el.preview.hidden = false;
   const urlCount = group.urls.length;
   el.previewMeta.textContent =
     urlCount === 0 ? "0 URLs" : `${urlCount} numbered ${plural(urlCount, "URL")}`;
 
-  const lines =
-    group.formattedText.length > 0
-      ? group.formattedText.split("\n\n")
-      : group.formattedLines;
+  el.previewHeader.hidden = !group.hasTitle;
+  if (group.hasTitle) {
+    el.previewHeader.textContent = formatGroupHeaderLine(group.title);
+  }
+
   const fragment = document.createDocumentFragment();
-  lines.forEach((line, position) => {
+  group.entries.forEach((entry, index) => {
     const item = document.createElement("li");
-    item.className = "preview-item";
-    if (position === 0 && group.hasTitle) {
-      item.classList.add("preview-item--header");
-    }
+    item.className = "preview-entry";
 
-    const body = document.createElement("span");
-    body.className = "tab-body";
+    const title = document.createElement("span");
+    title.className = "preview-entry-title";
+    title.textContent = `${index + 1}. ${entry.title}`;
 
-    const code = document.createElement("code");
-    code.className = "tab-url";
-    code.textContent = line ?? "";
+    const url = document.createElement("span");
+    url.className = "preview-entry-url";
+    url.textContent = entry.url;
 
-    body.append(code);
-    item.append(body);
+    item.append(title, url);
     fragment.append(item);
   });
   el.previewList.replaceChildren(fragment);
@@ -226,6 +265,7 @@ function renderPreview() {
 
   el.copy.disabled = noUrls;
   el.exportTxt.disabled = noUrls;
+  el.saveSaved.disabled = noUrls;
   el.copy.textContent = noUrls
     ? "Copy URLs"
     : `Copy ${group.urls.length} ${plural(group.urls.length, "URL")}`;
@@ -434,6 +474,27 @@ el.exportTxt.addEventListener("click", () => {
   exportSelected();
 });
 
+el.saveSaved.addEventListener("click", () => {
+  void saveSelectedGroup();
+});
+
+el.saveConflictMerge.addEventListener("click", () => {
+  saveState.policy = "merge";
+  void saveSelectedGroup();
+});
+
+el.saveConflictRename.addEventListener("click", () => {
+  saveState.policy = "rename";
+  void saveSelectedGroup();
+});
+
+// Conflict-bar Cancel leaves saved data untouched and never shows
+// validation errors.
+el.saveConflictCancel.addEventListener("click", () => {
+  hideSaveConflict();
+  setSaveStatus("info", "Save cancelled.");
+});
+
 /* ── Import: saved links ─────────────────────────────────────────────
  *
  * Importing never opens a website: parsed links are only previewed in the
@@ -461,6 +522,7 @@ function resetImportUI() {
   el.importWarnings.hidden = true;
   el.importWarnings.textContent = "";
   el.importConfirm.disabled = true;
+  clearImportStatus();
 }
 
 function readEditedGroupNames() {
@@ -561,7 +623,7 @@ function refreshImportPreview() {
 async function loadImportFile(file) {
   if (!file) return;
   if (file.size > MAX_IMPORT_FILE_BYTES) {
-    setStatus("error", `“${file.name}” is too large (max 5 MB).`);
+    setImportStatus("error", `“${file.name}” is too large (max 5 MB).`);
     return;
   }
   el.importFile.disabled = true;
@@ -571,12 +633,12 @@ async function loadImportFile(file) {
     refreshImportPreview();
     el.importPanel.open = true;
     if (!text.trim()) {
-      setStatus("info", `“${file.name}” is empty.`);
+      setImportStatus("info", `“${file.name}” is empty.`);
     } else {
-      setStatus("success", `Loaded “${file.name}”. Review the preview, then press Import.`);
+      setImportStatus("success", `Loaded “${file.name}”. Review the preview, then press Import.`);
     }
   } catch (error) {
-    setStatus("error", `Could not read “${file.name}”: ${describeError(error)}.`);
+    setImportStatus("error", `Could not read “${file.name}”: ${describeError(error)}.`);
   } finally {
     el.importFile.disabled = false;
   }
@@ -590,7 +652,7 @@ async function confirmImport() {
   for (let index = 0; index < importState.parsed.groups.length; index += 1) {
     const name = names[index];
     if (!name) {
-      setStatus("error", "Enter a name for every group before importing.");
+      setImportStatus("error", "Enter a name for every group before importing.");
       const input = el.importGroups.querySelector(`input[data-group-index="${index}"]`);
       if (input instanceof HTMLInputElement) {
         input.setAttribute("aria-invalid", "true");
@@ -602,7 +664,7 @@ async function confirmImport() {
   }
 
   if (namedGroups.length === 0) {
-    setStatus("info", "Nothing to import — this text has no links.");
+    setImportStatus("info", "Nothing to import — this text has no links.");
     return;
   }
 
@@ -627,10 +689,71 @@ async function confirmImport() {
     const summary = buildImportSummary(result);
     await refreshSavedGroups();
     resetImportUI();
-    setStatus(summary.kind, summary.text);
+    setImportStatus(summary.kind, summary.text);
   } catch (error) {
-    setStatus("error", `Import failed: ${describeError(error)}. Your saved links are unchanged.`);
+    setImportStatus("error", `Import failed: ${describeError(error)}. Your saved links are unchanged.`);
     el.importConfirm.disabled = false;
+  }
+}
+
+const saveState = { policy: null };
+
+function hideSaveConflict() {
+  el.saveConflict.hidden = true;
+  el.saveConflictNote.textContent = "";
+  saveState.policy = null;
+}
+
+/**
+ * Save the currently selected export group into Saved Links.
+ *
+ * Reuses the import pipeline's storage machinery: `findNameConflicts` and
+ * `applyImportToSavedGroups` (merge / rename policies) with the same
+ * duplicate-URL rules. It only touches extension storage — it never opens
+ * websites or creates tabs.
+ */
+async function saveSelectedGroup() {
+  const group = selectedGroup();
+  if (!group || group.urls.length === 0) return;
+
+  const name = savedGroupNameFor(group);
+  const entries = group.entries.map((entry) => ({ title: entry.title, url: entry.url }));
+
+  el.saveSaved.disabled = true;
+  try {
+    const saved = await loadSavedGroups();
+    const conflicts = findNameConflicts([{ name, entries }], saved);
+
+    if (conflicts.length > 0 && !saveState.policy) {
+      el.saveConflictNote.textContent = `“${name}” already exists. Choose how to save:`;
+      el.saveConflict.hidden = false;
+      el.saveSaved.disabled = false;
+      return;
+    }
+
+    const policy = conflicts.length > 0 ? saveState.policy : "merge";
+    const result = applyImportToSavedGroups(saved, [{ name, entries }], { policy });
+    await saveSavedGroups(result.groups);
+
+    const summary = buildImportSummary(result, { newVerb: "Saved" });
+    let text = summary.text;
+    // A partial merge reports both the added links and the duplicates that
+    // were skipped (all-duplicate merges already surface as a no-op info).
+    if (result.merged.length > 0) {
+      const mergedAdded = result.merged.reduce((sum, entry) => sum + entry.addedCount, 0);
+      const duplicates = Math.max(0, entries.length - mergedAdded);
+      if (duplicates > 0) {
+        text += ` ${duplicates} duplicate${duplicates === 1 ? "" : "s"} skipped.`;
+      }
+    }
+    await refreshSavedGroups();
+    hideSaveConflict();
+    setSaveStatus(summary.kind, text);
+  } catch (error) {
+    setSaveStatus("error", `Could not save: ${describeError(error)}. Your saved links are unchanged.`);
+    hideSaveConflict();
+  } finally {
+    el.saveSaved.disabled = false;
   }
 }
 
@@ -728,14 +851,24 @@ function renderSavedGroups(saved) {
 
     const headActions = document.createElement("div");
     headActions.className = "saved-entry-actions";
+    const openAllButton = document.createElement("button");
+    openAllButton.type = "button";
+    openAllButton.className = "mini-btn save-group-open";
+    openAllButton.setAttribute("aria-label", "Open all links in this group");
+    openAllButton.title = "Open all links in this group in new background tabs (the sites will load)";
+    openAllButton.dataset.action = "open-group";
+    openAllButton.dataset.groupId = group.id;
+    openAllButton.innerHTML =
+      '<svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M6 3H2.5v6.5H9V6M9.5 2.5 6 6M9.5 2.5V5M9.5 2.5H7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
     const removeAllButton = document.createElement("button");
     removeAllButton.type = "button";
     removeAllButton.className = "mini-btn mini-btn--danger";
-    removeAllButton.textContent = "Remove group";
+    removeAllButton.textContent = "Remove";
     removeAllButton.title = "Remove this whole saved group (links are not opened)";
     removeAllButton.dataset.action = "remove-group";
     removeAllButton.dataset.groupId = group.id;
-    headActions.append(removeAllButton);
+    headActions.append(openAllButton, removeAllButton);
 
     head.append(toggle, headActions);
     detail.append(ol);
@@ -794,6 +927,33 @@ async function handleSavedClick(event) {
         await saveSavedGroups(saved);
         await refreshSavedGroups();
         setStatus("success", "Link removed.");
+      }
+      return;
+    }
+
+    if (action === "open-group") {
+      const group = saved.find((item) => item.id === groupId);
+      if (!group) {
+        setStatus("error", "That group no longer exists — refresh the list.");
+        return;
+      }
+      if (group.entries.length === 0) {
+        setStatus("info", "This group has no links to open.");
+        return;
+      }
+      const urls = group.entries.map((entry) => entry.url);
+      try {
+        const opened = await openLinksInBackground(urls);
+        setStatus(
+          opened === 0
+            ? "error"
+            : "success",
+          opened === 0
+            ? "Could not open any links in this group."
+            : `Opened ${opened} ${plural(opened, "link")} in new background tabs.`,
+        );
+      } catch (error) {
+        setStatus("error", `Could not open the links: ${describeError(error)}`);
       }
       return;
     }
@@ -859,11 +1019,6 @@ el.importGroups.addEventListener("input", (event) => {
     target.setAttribute("aria-invalid", String(invalid));
     el.importConfirm.disabled = importState.parsed ? countImportEntries(importState.parsed.groups) === 0 : true;
   }
-});
-
-el.importCancel.addEventListener("click", () => {
-  resetImportUI();
-  setStatus("info", "Import cancelled.");
 });
 
 el.importConflictMerge.addEventListener("click", () => {

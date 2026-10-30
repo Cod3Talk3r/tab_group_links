@@ -26,7 +26,7 @@ No external dependencies, no remote services, no icons.
 5. Selecting a real or virtual group shows a preview of its numbered
    title + URL entries. The preview is collapsed by default to keep the popup
    compact; its keyboard-operable toggle expands/collapses the links, and the
-   Copy and Export buttons stay visible and usable while collapsed.
+   Copy, Save and Export buttons stay visible and usable while collapsed.
 6. **Copy URLs** writes the numbered list to the clipboard. It uses
    `navigator.clipboard.writeText()` and falls back to a hidden `<textarea>`
    plus `document.execCommand("copy")` if the async clipboard API is
@@ -34,6 +34,16 @@ No external dependencies, no remote services, no icons.
 7. **Export TXT** downloads the same numbered list as a `.txt` file using a
    `Blob` and a temporary object URL, so no extra permission or third-party
    code is needed.
+8. **Save to Saved Links** stores the selected group's links in the
+   extension's Saved Links storage (the same `chrome.storage.local` data the
+   Importer writes to) — no copy or file needed. An explicit group title
+   becomes the group name; unnamed groups use the same display name the list
+   shows (for example "Untitled group (blue)"), never an invented one. If a
+   group with that name already exists you can **Merge into existing group**
+   (duplicate URLs are skipped), **Save as a separate group** (under the next
+   free numeric name such as "Work (2)" — "Work (3)" if that is taken), or
+   **Cancel** — cancelling
+   never modifies stored data, and saving never opens any website.
 
 The preview, clipboard output, and TXT export all use the **exact same**
 format: a numbered title on its own line, the URL on the next line prefixed
@@ -242,11 +252,13 @@ An existing group is never silently overwritten.
 ### Saved links panel
 
 Confirmed imports appear under **Saved links** as expandable groups with
-per-link **Open** and **Remove** buttons, an **Open all** action (with a
-confirmation dialog because those sites will load), and a **Remove group**
-button. These are saved links stored in this extension's data, **not** open
-browser tabs; the panel says so explicitly. They persist across popup
-closures and browser restarts, and are never auto-restored into tabs.
+per-link **Open** and **Remove** buttons, an **Open all** icon button on each
+saved group (opens that group's links in background tabs, in order), and a
+**Remove** button that deletes the whole group (with a confirmation dialog
+because opening those sites will load them). These are saved links stored in
+this extension's data, **not** open browser tabs; the panel says so
+explicitly. They persist across popup closures and browser restarts, and are
+never auto-restored into tabs.
 
 ### Import-related permissions
 

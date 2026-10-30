@@ -32,6 +32,7 @@
             <span id="preview-meta" class="meta"></span>
           </summary>
           <div id="preview-body">
+            <p id="preview-header" class="preview-header" hidden></p>
             <ol id="preview-list" class="preview-list"></ol>
             <p id="preview-empty" class="empty-state" hidden></p>
             <p id="preview-note" class="note" hidden></p>
@@ -39,10 +40,30 @@
         </details>
         <div class="actions">
           <button id="copy" class="primary" type="button">Copy URLs</button>
+          <button
+            id="save-saved"
+            class="secondary action-secondary save-btn"
+            type="button"
+            aria-label="Save to Saved Links"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path d="M6 2v5M3.5 4.5 6 7l2.5-2.5M2 9.5h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Save</span>
+          </button>
           <button id="export-txt" class="secondary action-secondary" type="button">
             Export TXT
           </button>
         </div>
+        <div id="save-conflict" class="import-conflict" hidden>
+          <p id="save-conflict-note" class="note"></p>
+          <div class="actions">
+            <button id="save-conflict-merge" class="secondary action-secondary" type="button">Merge into existing group</button>
+            <button id="save-conflict-rename" class="secondary action-secondary" type="button">Save as a separate group</button>
+            <button id="save-conflict-cancel" class="secondary action-secondary" type="button">Cancel</button>
+          </div>
+        </div>
+        <p id="save-status" class="status" role="status" aria-live="polite" hidden></p>
       </section>
 
       <details id="import-panel" class="panel import-panel">
@@ -78,9 +99,9 @@
             </div>
             <div class="actions">
               <button id="import-confirm" class="primary" type="button" disabled>Import</button>
-              <button id="import-cancel" class="secondary action-secondary" type="button">Cancel</button>
             </div>
           </div>
+          <p id="import-status" class="status" role="status" aria-live="polite" hidden></p>
         </div>
       </details>
 

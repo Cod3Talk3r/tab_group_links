@@ -260,19 +260,45 @@ main {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 7px;
+  gap: 4px;
   max-height: 260px;
   overflow-y: auto;
 }
 
-.preview-item {
-  padding-top: 7px;
-  border-top: 1px solid var(--border);
+/* Export preview link cards — same visual recipe as Import Preview cards
+   (.import-entry): bordered surface chip with title over URL. */
+
+.preview-entry {
+  display: grid;
+  gap: 1px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  min-width: 0;
 }
 
-.preview-item:first-child {
-  padding-top: 0;
-  border-top: none;
+.preview-entry-title {
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.preview-entry-url {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* The exported "Group name: <name>" header, shown when the group is named */
+
+.preview-header {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .tab-body {
@@ -531,6 +557,25 @@ button:disabled {
   gap: 8px;
 }
 
+/* The hidden attribute must win over display:grid, or the conflict bars
+   render even when there is no conflict. */
+.import-conflict[hidden] {
+  display: none;
+}
+
+/* The three conflict actions are long labels; let them wrap and share width
+   instead of overflowing the ~356px popup column. Scoped to this bar only. */
+
+.import-conflict .actions {
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.import-conflict .action-secondary {
+  flex: 1 1 auto;
+  padding: 6px 10px;
+}
+
 /* ── saved links list ── */
 
 .saved-list {
@@ -658,15 +703,6 @@ button:disabled {
   color: var(--error-text);
 }
 
-/* group-name header inside the preview, shown when the selected group is named */
-
-.preview-item--header .tab-url {
-  color: var(--text);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-}
-
 /* ── collapsible export preview (same pattern as the Import panel) ── */
 
 .preview-details {
@@ -703,4 +739,54 @@ button:disabled {
 
 .preview-details > summary .meta {
   text-align: right;
+}
+
+/* The preview action row (Copy / Save / Export TXT) wraps instead of
+   overflowing the ~356px popup column. */
+
+#preview > .actions {
+  flex-wrap: wrap;
+}
+
+/* Compact Save button: icon + short label, inline-flex so the three
+   preview actions keep one baseline. */
+
+.save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 10px;
+}
+
+.save-btn svg {
+  display: block;
+  color: var(--muted);
+}
+
+/* The Import confirm button now owns the whole action row. */
+
+#import-confirm {
+  flex: 1;
+  padding: 7px 12px;
+}
+
+/* Status regions inside the Save and Import sections */
+
+#save-status,
+#import-status {
+  margin-top: 8px;
+}
+
+/* Icon-only button that opens a saved group's links */
+
+.save-group-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 7px;
+  line-height: 0;
+}
+
+.save-group-open svg {
+  display: block;
 }

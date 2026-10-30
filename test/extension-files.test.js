@@ -64,9 +64,12 @@ describe("extension files", () => {
     expect(source).toContain("buildUngroupedEntry");
     expect(source).toContain("UNGROUPED_GROUP_ID");
     expect(source).toContain("UNGROUPED_TITLE");
-    // Should use formattedLines / formattedText, not the old toNumberedUrlLines.
-    expect(source).toContain("group.formattedLines");
+    // The preview renders cards from group.entries; copy/export text is
+    // still built from the shared formattedText helper, never the old
+    // toNumberedUrlLines.
+    expect(source).toContain("group.entries");
     expect(source).toContain("group.formattedText");
+    expect(source).toContain("formatGroupHeaderLine");
     expect(source).not.toContain("toNumberedUrlLines");
     expect(existsSync(join(root, "src/groups.js"))).toBe(true);
     expect(existsSync(join(root, "src/export.js"))).toBe(true);
@@ -153,21 +156,62 @@ describe("extension files", () => {
     expect(source).not.toContain("clipboardErrorMessage");
   });
 
-  test("import and conflict Cancel reset the UI without parsing or importing", () => {
+  test("Save to Saved Links stays available while preview is collapsed and never opens tabs", () => {
+    const html = read("popup.html");
     const source = read("popup.js");
-    // Main Cancel: resets state, never calls confirmImport.
-    const mainBlock = source.match(/el\.importCancel\.addEventListener\("click", \(\) => \{[\s\S]*?\}\);/);
-    expect(mainBlock).not.toBeNull();
-    expect(mainBlock[0]).toContain("resetImportUI()");
-    expect(mainBlock[0]).not.toContain("confirmImport");
-    expect(mainBlock[0]).not.toContain("parseImportText");
-    // Conflict-bar Cancel cancels the whole import instead of invoking the
-    // old "skip conflicts" policy path.
+    // Button + conflict bar sit outside the collapsible <details>.
+    const detailsEnd = html.indexOf("</details>");
+    expect(html.indexOf('id="save-saved"')).toBeGreaterThan(detailsEnd);
+    expect(html.indexOf('id="save-conflict"')).toBeGreaterThan(detailsEnd);
+    // Clear, labelled conflict actions.
+    expect(html).toContain("Merge into existing group");
+    expect(html).toContain("Save as a separate group");
+    expect(html).toContain(">Cancel</button>");
+    // The save flow reuses the import pipeline on storage only.
+    const saveBlock = source.match(/async function saveSelectedGroup\(\) \{[\s\S]*?\n\}/);
+    expect(saveBlock).not.toBeNull();
+    expect(saveBlock[0]).toContain("applyImportToSavedGroups(saved, [{ name, entries }]");
+    expect(saveBlock[0]).toContain("saveSavedGroups(result.groups)");
+    expect(saveBlock[0]).toContain("buildImportSummary(result, { newVerb: \"Saved\" })");
+    expect(saveBlock[0]).not.toContain("tabs.create");
+    expect(saveBlock[0]).not.toContain("openLinksInBackground");
+    // Conflict-bar Cancel resets without parsing, importing or saving.
+    const cancelBlock = source.match(/el\.saveConflictCancel\.addEventListener\("click", \(\) => \{[\s\S]*?\}\);/);
+    expect(cancelBlock).not.toBeNull();
+    expect(cancelBlock[0]).toContain("hideSaveConflict()");
+    expect(cancelBlock[0]).toContain("Save cancelled.");
+    expect(cancelBlock[0]).not.toContain("saveSelectedGroup");
+    expect(cancelBlock[0]).not.toContain("confirmImport");
+  });
+
+  test("main Import row has a single button; the conflict Cancel still cancels fully", () => {
+    const html = read("popup.html");
+    const source = read("popup.js");
+    // The main Import action row no longer has a redundant Cancel button.
+    expect(html).not.toContain('id="import-cancel"');
+    expect(source).not.toContain("importCancel");
+    const rowStart = html.indexOf('id="import-confirm"');
+    const rowEnd = html.indexOf("</div>", rowStart);
+    expect(html.slice(rowStart, rowEnd)).not.toContain("Cancel");
+    // Conflict-bar Cancel still cancels the whole import instead of invoking
+    // the old "skip conflicts" policy path.
     const conflictBlock = source.match(/el\.importConflictCancel\.addEventListener\("click", \(\) => \{[\s\S]*?\}\);/);
     expect(conflictBlock).not.toBeNull();
     expect(conflictBlock[0]).toContain("resetImportUI()");
     expect(conflictBlock[0]).not.toContain("confirmImport");
     expect(conflictBlock[0]).not.toContain("applyImportToSavedGroups");
+  });
+
+  test("duplicate-group conflict actions wrap instead of overflowing", () => {
+    const html = read("popup.html");
+    const css = read("popup.css");
+    // Labels stay intact and readable.
+    expect(html).toContain("Merge into existing group");
+    expect(html).toContain("Import as a separate group");
+    expect(html).toContain("Cancel");
+    // Scoped layout fix: the conflict bar wraps and uses compact padding.
+    expect(css).toMatch(/\.import-conflict \.actions[\s\S]*?flex-wrap: wrap/);
+    expect(css).toMatch(/\.import-conflict \.action-secondary[\s\S]*?padding: 6px 10px/);
   });
 
   test("the export preview uses the import-style details/summary toggle", () => {
@@ -190,6 +234,166 @@ describe("extension files", () => {
     expect(source).not.toContain("previewToggle");
     expect(source).toContain("el.copy.addEventListener(\"click\"");
     expect(source).toContain("el.exportTxt.addEventListener(\"click\"");
+  });
+
+  test("export preview entries are bordered cards like Import Preview entries", () => {
+    const html = read("popup.html");
+    const source = read("popup.js");
+    const css = read("popup.css");
+    // Header + card list live inside the collapsible preview body.
+    expect(html).toContain('id="preview-header"');
+    expect(html).toContain('id="preview-list"');
+    // Cards are built from group.entries with separate title and URL spans.
+    expect(source).toContain('className = "preview-entry"');
+    expect(source).toContain('className = "preview-entry-title"');
+    expect(source).toContain('className = "preview-entry-url"');
+    // Same card recipe as .import-entry (surface chip with border).
+    expect(css).toContain(".preview-entry {");
+    expect(css).toContain("border-radius: 6px");
+    expect(css).toContain("overflow-wrap: anywhere");
+    // The old text-block preview classes are gone.
+    expect(css).not.toContain(".preview-item");
+    expect(source).not.toContain("preview-item--header");
+  });
+
+  test("Save button is compact with an icon and keeps a full accessible name", () => {
+    const html = read("popup.html");
+    const css = read("popup.css");
+    expect(html).toContain('aria-label="Save to Saved Links"');
+    expect(html).toMatch(/<button[^>]*id="save-saved"[^>]*>[\s\S]*?<svg/);
+    expect(html).toMatch(/<svg[^>]*>[\s\S]*?<\/svg>[\s\S]*?<span>Save<\/span>/);
+    expect(css).toMatch(/\.save-btn[\s\S]*?display: inline-flex/);
+    expect(css).toMatch(/\.save-btn[\s\S]*?gap: 5px/);
+    // No long visible label left behind.
+    expect(html).not.toContain(">Save to Saved Links</button>");
+  });
+
+  test("Save conflict controls are hidden until a real name conflict exists", () => {
+    const html = read("popup.html");
+    const source = read("popup.js");
+    // Hidden by default and scoped to the preview (Save) section.
+    expect(html).toMatch(/<div id="save-conflict"[^>]*hidden/);
+    expect(html.indexOf('id="save-conflict"')).toBeGreaterThan(html.indexOf('<section id="preview"'));
+    expect(html.indexOf('id="save-conflict"')).toBeLessThan(html.indexOf('id="import-panel"'));
+    // Shown only inside the conflict check; every re-render hides it again.
+    expect(source).toMatch(/if \(conflicts\.length > 0 && !saveState\.policy\) \{/);
+    expect(source).toMatch(/function renderPreview\(\) \{/);
+    const previewFn = source.match(/function renderPreview\(\) \{[\s\S]*?\n\}/)[0];
+    expect(previewFn).toContain("hideSaveConflict()");
+  });
+
+  test("Save feedback routes to the Save section and Import feedback to the Import section", () => {
+    const html = read("popup.html");
+    const source = read("popup.js");
+    // Save status region lives inside section#preview; import status inside
+    // the import panel.
+    expect(html.indexOf('id="save-status"')).toBeGreaterThan(html.indexOf('<section id="preview"'));
+    expect(html.indexOf('id="save-status"')).toBeLessThan(html.indexOf('id="import-panel"'));
+    expect(html.indexOf('id="import-status"')).toBeGreaterThan(html.indexOf('id="import-panel"'));
+    // The save flow writes only via setSaveStatus, never setStatus.
+    const saveBlock = source.match(/async function saveSelectedGroup\(\) \{[\s\S]*?\n\}/)[0];
+    expect(saveBlock).toContain("setSaveStatus(summary.kind, text)");
+    expect(saveBlock).toContain("setSaveStatus(\"error\"");
+    expect(saveBlock).not.toContain("setStatus(");
+    expect(saveBlock).not.toContain("setImportStatus(");
+    // Partial merges report added + skipped duplicates in the Save section.
+    expect(saveBlock).toContain("const duplicates = Math.max(0, entries.length - mergedAdded)");
+    expect(saveBlock).toContain("if (duplicates > 0)");
+    expect(saveBlock).toContain("skipped.");
+    // The import flow writes only via setImportStatus.
+    const importBlock = source.match(/async function confirmImport\(\) \{[\s\S]*?\n\}/)[0];
+    expect(importBlock).toContain("setImportStatus(");
+    expect(importBlock).not.toContain("setStatus(");
+    expect(importBlock).not.toContain("setSaveStatus(");
+    // Conflict-bar Cancel clears the Save section, not the Import section.
+    const saveCancelled = source.match(/el\.saveConflictCancel\.addEventListener\("click", \(\) => \{[\s\S]*?\}\);/)[0];
+    expect(saveCancelled).toContain("hideSaveConflict()");
+    expect(saveCancelled).toContain("setSaveStatus(\"info\", \"Save cancelled.\")");
+  });
+
+  test("saved groups have an explicit Open-all button beside Remove", () => {
+    const source = read("popup.js");
+    expect(source).toContain('openAllButton.dataset.action = "open-group"');
+    expect(source).toContain('aria-label", "Open all links in this group"');
+    expect(source).toContain("openLinksInBackground(urls)");
+    expect(source).toContain("group.entries.map((entry) => entry.url)");
+    // Remove is relabelled and keeps its confirmation safeguard.
+    expect(source).toContain('removeAllButton.textContent = "Remove"');
+    expect(source).not.toContain('textContent = "Remove group"');
+    expect(source).toMatch(/action === "remove-group"[\s\S]*?window\.confirm/);
+  });
+
+  test("every el.X reference in popup.js is initialized in the el object (ref audit)", () => {
+    const source = read("popup.js");
+    const elBlock = source.slice(source.indexOf("const el = {"), source.indexOf("};", source.indexOf("const el = {")));
+    const refs = new Set([...elBlock.matchAll(/^\s*([A-Za-z0-9_]+):\s*document\.getElementById/gm)].map((m) => m[1]));
+    // Element members accessed through a ref are fine without their own ref.
+    const elementMembers = new Set([
+      "className",
+      "textContent",
+      "hidden",
+      "disabled",
+      "value",
+      "focus",
+      "setAttribute",
+      "removeAttribute",
+      "addEventListener",
+      "append",
+      "appendChild",
+      "replaceChildren",
+      "classList",
+      "dataset",
+      "style",
+      "click",
+      "title",
+      "innerHTML",
+      "checked",
+    ]);
+    const used = new Set([...source.matchAll(/el\.([A-Za-z0-9_]+)/g)].map((m) => m[1]));
+    const missing = [...used].filter((key) => !refs.has(key) && !elementMembers.has(key));
+    expect(missing).toEqual([]);
+  });
+
+  test("Save/Import status regions exist in HTML and their JS refs are declared before use", () => {
+    const html = read("popup.html");
+    const source = read("popup.js");
+    for (const id of ["status", "save-status", "import-status"]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+    expect(source).toContain('saveStatus: document.getElementById("save-status")');
+    expect(source).toContain('importStatus: document.getElementById("import-status")');
+    // The helpers exist and the ref is declared before the helper can run.
+    for (const fn of ["setSaveStatus", "clearSaveStatus", "setImportStatus", "clearImportStatus"]) {
+      expect(source).toContain(`function ${fn}`);
+    }
+    expect(source.indexOf("saveStatus: document.getElementById")).toBeGreaterThan(-1);
+    expect(source.indexOf("saveStatus: document.getElementById")).toBeLessThan(source.indexOf("function setSaveStatus"));
+    expect(source.indexOf("importStatus: document.getElementById")).toBeLessThan(source.indexOf("function setImportStatus"));
+    // The global status ref keeps working as before.
+    expect(source).toContain('status: document.getElementById("status")');
+  });
+
+  test("loadGroups renders discovered groups and only clears them inside catch", () => {
+    const source = read("popup.js");
+    const fn = source.match(/async function loadGroups\(\) \{[\s\S]*?\n\}/)[0];
+    // Happy path: fetched groups are stored before rendering…
+    expect(fn.indexOf("state.groups = allGroups")).toBeGreaterThan(-1);
+    expect(fn.indexOf("state.groups = allGroups")).toBeLessThan(fn.indexOf("renderPreview();"));
+    // …and the empty-state reset only ever happens in the catch block.
+    const catchStart = fn.indexOf("catch (error)");
+    expect(fn.indexOf("state.groups = []")).toBeGreaterThan(catchStart);
+  });
+
+  test("conflict bars are hidden by default: CSS must not override the hidden attribute", () => {
+    const html = read("popup.html");
+    const css = read("popup.css");
+    // Both conflict bars start hidden in the markup.
+    expect(html).toContain('<div id="save-conflict" class="import-conflict" hidden>');
+    expect(html).toContain('<div id="import-conflict" class="import-conflict" hidden>');
+    // .import-conflict sets display:grid, which would defeat the UA [hidden] rule,
+    // so an explicit [hidden] override must exist for both bars.
+    expect(css).toContain(".import-conflict[hidden]");
+    expect(css).toMatch(/\.import-conflict\[hidden\]\s*\{[^}]*display:\s*none/);
   });
 
   test("only src/open-links.js can create tabs with URLs", () => {
