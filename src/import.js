@@ -316,9 +316,13 @@ export function countImportEntries(groups) {
  *   merged: Array<{ name: string, addedCount: number }>,
  *   skipped: string[]
  * }} result  shape returned by `applyImportToSavedGroups`
+ * @param {{ newVerb?: string }}
+ *   [options]  verb for newly created groups, e.g. "Imported" (default) or
+ *              "Saved" for the Save-to-Saved-Links flow
  * @returns {{ kind: "success" | "info", text: string }}
  */
-export function buildImportSummary(result) {
+export function buildImportSummary(result, options = {}) {
+  const newVerb = options?.newVerb === "Saved" ? "Saved" : "Imported";
   const addedList = Array.isArray(result?.added) ? result.added : [];
   const mergedList = Array.isArray(result?.merged) ? result.merged : [];
   const addedCount = addedList.reduce((sum, entry) => sum + (Number.isFinite(entry?.importedCount) ? entry.importedCount : 0), 0);
@@ -329,20 +333,27 @@ export function buildImportSummary(result) {
     if (mergedList.length > 0) {
       return {
         kind: "info",
-        text: "Nothing new to import — those links are already saved.",
+        text: newVerb === "Saved"
+          ? "No new links to add — all links are already saved."
+          : "Nothing new to import — those links are already saved.",
       };
     }
     if (addedList.length > 0) {
-      return { kind: "info", text: "Imported groups were empty and nothing was saved." };
+      return {
+        kind: "info",
+        text: newVerb === "Saved"
+          ? "Nothing to save — this group has no links."
+          : "Imported groups were empty and nothing was saved.",
+      };
     }
     return { kind: "info", text: "Nothing to import — this text has no links." };
   }
 
   const bits = [];
   if (addedList.length === 1) {
-    bits.push(`Imported ${addedCount} ${addedCount === 1 ? "link" : "links"} to “${addedList[0].name}”.`);
+    bits.push(`${newVerb} ${addedCount} ${addedCount === 1 ? "link" : "links"} to “${addedList[0].name}”.`);
   } else if (addedList.length > 1) {
-    bits.push(`Imported ${addedCount} ${addedCount === 1 ? "link" : "links"} across ${addedList.length} groups.`);
+    bits.push(`${newVerb} ${addedCount} ${addedCount === 1 ? "link" : "links"} across ${addedList.length} groups.`);
   }
   if (mergedList.length === 1) {
     bits.push(`Added ${mergedCount} new ${mergedCount === 1 ? "link" : "links"} to “${mergedList[0].name}”.`);

@@ -582,4 +582,17 @@ describe("buildImportSummary", () => {
       buildImportSummary({ added: [{ name: "Work", importedCount: 0 }], merged: [], skipped: [] }),
     ).toEqual({ kind: "info", text: "Imported groups were empty and nothing was saved." });
   });
+
+  test("supports the Save-to-Saved-Links verb without changing import wording", () => {
+    expect(
+      buildImportSummary({ added: [{ name: "Work", importedCount: 12 }], merged: [], skipped: [] }, { newVerb: "Saved" }),
+    ).toEqual({ kind: "success", text: "Saved 12 links to “Work”." });
+    expect(
+      buildImportSummary({ added: [], merged: [{ name: "Shop", addedCount: 0 }], skipped: [] }, { newVerb: "Saved" }),
+    ).toEqual({ kind: "info", text: "No new links to add — all links are already saved." });
+    // Default verb stays "Imported" for the import flow.
+    expect(
+      buildImportSummary({ added: [{ name: "Work", importedCount: 1 }], merged: [], skipped: [] }),
+    ).toEqual({ kind: "success", text: "Imported 1 link to “Work”." });
+  });
 });
