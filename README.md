@@ -2,13 +2,16 @@
 
 A small Manifest V3 browser extension that lists the tab groups in the current window (plus a virtual **Ungrouped Tabs** entry), previews their numbered tab titles and URLs, and copies or exports every tab in a group as a numbered plain-text list in the original tab order.
 
-**Browser compatibility**
+## Browser compatibility
 
 - **Brave:** Primary target; tested and working.
+- **Google Chrome:** Tested and working.
 - **Microsoft Edge:** Tested and working.
-- **Google Chrome:** Expected to be compatible, but not yet verified through real-browser testing.
+- **Mozilla Firefox (desktop):** Tested and working when loaded temporarily. Permanent installation has not been verified.
+- **Opera (desktop):** Partially compatible. Opera's Tab Islands are not fully supported; their names and colors are not reliably detected.
+- **Vivaldi (desktop):** Partially compatible. A popup issue occurs after deleting a saved group; see [Known limitations](#known-limitations).
 
-The extension uses Chromium's Manifest V3 APIs, including `chrome.tabs` and `chrome.tabGroups`.
+The extension uses browser extension APIs, including `tabs`, `tabGroups`, and `storage`.
 
 No external dependencies, no remote services, no icons.
 
@@ -25,13 +28,13 @@ No external dependencies, no remote services, no icons.
 <summary>Implementation details</summary>
 
 1. The toolbar popup asks for the current window.
-2. It reads the window's tab groups (`chrome.tabGroups`) and tabs (`chrome.tabs`).
+2. It reads the window's tab groups (`tabGroups`) and tabs (`tabs`).
 3. Real groups appear first, ordered by the position of their first tab in the tab strip. Tabs inside a group keep their original tab order.
-4. A virtual **Ungrouped Tabs** entry follows the real groups. It contains every tab whose `groupId` is `-1` (the Chromium sentinel for ungrouped tabs), sorted by `tab.index`. This entry is purely a UI convenience; it never calls `chrome.tabGroups` or modifies the browser's actual tab groups.
+4. A virtual **Ungrouped Tabs** entry follows the real groups. It contains every tab whose `groupId` is `-1` (the Chromium sentinel for ungrouped tabs), sorted by `tab.index`. This entry is purely a UI convenience; it never calls `tabGroups` or modifies the browser's actual tab groups.
 5. Selecting a real or virtual group shows a preview of its numbered title + URL entries. The preview is collapsed by default to keep the popup compact; its keyboard-operable toggle expands/collapses the links, and the Copy, Save and Export buttons stay visible and usable while collapsed.
 6. **Copy URLs** writes the numbered list to the clipboard. It uses `navigator.clipboard.writeText()` and falls back to a hidden `<textarea>` plus `document.execCommand("copy")` if the async clipboard API is unavailable or rejected.
 7. **Export TXT** downloads the same numbered list as a `.txt` file using a `Blob` and a temporary object URL, so no extra permission or third-party code is needed.
-8. **Save to Saved Links** stores the selected group's links in the extension's Saved Links storage (the same `chrome.storage.local` data the Importer writes to) — no copy or file needed. An explicit group title becomes the group name; unnamed groups use the same display name the list shows (for example "Untitled group (blue)"), never an invented one. If a group with that name already exists you can **Merge into existing group** (duplicate URLs are skipped), **Save as a separate group** (under the next free numeric name such as "Work (2)" — "Work (3)" if that is taken), or **Cancel** — cancelling never modifies stored data, and saving never opens any website.
+8. **Save to Saved Links** stores the selected group's links in the extension's Saved Links storage (the same local storage data the Importer writes to) — no copy or file needed. An explicit group title becomes the group name; unnamed groups use the same display name the list shows (for example "Untitled group (blue)"), never an invented one. If a group with that name already exists you can **Merge into existing group** (duplicate URLs are skipped), **Save as a separate group** (under the next free numeric name such as "Work (2)" — "Work (3)" if that is taken), or **Cancel** — cancelling never modifies stored data, and saving never opens any website.
 
 </details>
 
@@ -91,15 +94,15 @@ The popup header is compact: a single row with the extension title and a small, 
 | `tabGroups` | Read tab group titles, colors, and membership. |
 | `tabs` | Read tab URLs. |
 | `clipboardWrite` | Write the URL list to the clipboard (including the fallback). |
-| `storage` | Keep imported/saved link groups in `chrome.storage.local`. |
+| `storage` | Keep imported/saved link groups in local extension storage. |
 
-TXT export uses an `<a download>` link with a Blob object URL, which needs no additional permission. In particular, the extension does **not** request the `downloads` permission. The virtual "Ungrouped Tabs" feature needs no extra permissions because it only reads tabs that are already returned by `chrome.tabs.query()`.
+TXT export uses an `<a download>` link with a Blob object URL, which needs no additional permission. In particular, the extension does **not** request the `downloads` permission. The virtual "Ungrouped Tabs" feature needs no extra permissions because it only reads tabs that are already returned by `tabs.query()`.
 
 No host permissions, no content scripts, no background worker.
 
 ## Importing saved links
 
-> Importing never opens a website: parsed links are only previewed and then stored as extension data in `chrome.storage.local`. Opening a saved link is always an explicit, separate action.
+> Importing never opens a website: parsed links are only previewed and then stored as extension data in local storage. Opening a saved link is always an explicit, separate action.
 
 The popup has an **Import saved links** panel (collapsed by default). Paste text or choose a `.txt` file, review the parsed groups and links in the preview, optionally edit group names, then press **Import**. Cancel discards the preview without saving anything.
 
@@ -189,7 +192,7 @@ These are saved links stored in this extension's data, **not** open browser tabs
 
 ### Import-related permissions
 
-`storage` is added for `chrome.storage.local`. No `clipboardRead`, `activeTab`, `downloads`, or host permissions are requested — `clipboardRead` would display Chrome's warning **"Read data you copy and paste"**. Pasting is done by the user directly into the Import text area, and the file picker needs no permission.
+`storage` is used for local extension storage. No `clipboardRead`, `activeTab`, `downloads`, or host permissions are requested — `clipboardRead` would display Chrome's warning **"Read data you copy and paste"**. Pasting is done by the user directly into the Import text area, and the file picker needs no permission.
 
 ## Install in Brave (developer mode)
 
@@ -202,6 +205,17 @@ These are saved links stored in this extension's data, **not** open browser tabs
 
 After editing files, press the reload button on the extension card in `brave://extensions` and reopen the popup.
 
+## Install in Google Chrome (developer mode)
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked**.
+4. Select the cloned project folder.
+5. Pin **Tab Group Links** from the Extensions menu.
+6. Open the popup on a window containing tab groups.
+
+After editing files, click the Reload button on the extension card and reopen the popup.
+
 ## Install in Microsoft Edge (developer mode)
 
 1. Open `edge://extensions`.
@@ -212,6 +226,12 @@ After editing files, press the reload button on the extension card in `brave://e
 6. Open the extension popup in a window containing tab groups.
 
 After editing files, click the Reload button on the extension card and reopen the popup.
+
+## Firefox (temporary desktop testing)
+
+Firefox desktop was tested by loading the extension temporarily. A temporary installation is intended for testing and does not establish that the extension is ready for permanent Firefox installation or distribution.
+
+To load it temporarily, open `about:debugging`, select **This Firefox**, choose **Load Temporary Add-on…**, and select the extension's `manifest.json` file.
 
 ## Development / tests
 
@@ -232,9 +252,9 @@ node --check src/open-links.js
 
 - `test/groups.test.js` covers grouping, ordering, URL skipping, the exact two-line entry format (title, then ` -> ` + URL), blank-line separation, long URLs, control-character handling in titles, and the virtual "Ungrouped Tabs" entry.
 - `test/import.test.js` covers parsing the extension's own export format, the legacy numbered-URL format, bare URLs, explicit `Group:` headers, unnamed-group flows, name editing inputs, blank lines, CRLF/CR endings, a BOM, empty/duplicate groups, repeated URLs, long URLs with queries and fragments, malformed entries, unsafe schemes, and the entry cap.
-- `test/storage.test.js` covers the saved-group model, conflict detection, merge/rename/cancel policies, duplicate names, and `chrome.storage.local` round-trips, malformed data and quota/IO failures.
+- `test/storage.test.js` covers the saved-group model, conflict detection, merge/rename/cancel policies, duplicate names, and local storage round-trips, malformed data and quota/IO failures.
 - `test/export.test.js` covers filename sanitization, date stamps, TXT export content, and that preview, clipboard, and export text are identical.
-- `test/extension-files.test.js` checks the manifest, permissions, local file references, virtual group exports from `src/groups.js`, that the runtime sources contain no remote URLs, and crucially that the import and storage modules never touch `chrome.tabs` — only `src/open-links.js` can create tabs, and only from explicit user actions.
+- `test/extension-files.test.js` checks the manifest, permissions, local file references, virtual group exports from `src/groups.js`, that the runtime sources contain no remote URLs, and crucially that the import and storage modules never touch `tabs` — only `src/open-links.js` can create tabs, and only from explicit user actions.
 
 </details>
 
@@ -245,6 +265,9 @@ node --check src/open-links.js
 - Very restricted pages may expose no URL at all; those tabs are skipped.
 - Copying relies on the popup staying open until the clipboard write resolves (normally immediate). The fallback requires the popup to be focused.
 - The browser initiates the TXT download via a standard download link; the extension does not receive a completion event, so it reports that the download has started, not that the file was saved. Browser settings or policies may still block or ask where to save the download.
-- Google Chrome compatibility has not yet been verified through actual browser testing.
-- No automated browser UI test is included; popup logic is verified by reading and reviewing `popup.js`, not by driving Brave.
+- **Opera:** Tab Islands are not fully supported. In testing, island tabs were not consistently represented as named/color-coded groups; some appeared as ungrouped tabs with an unreliable generated color label.
+- **Vivaldi desktop:** In testing, after deleting a saved group, the extension popup may stop reopening until another extension is clicked. This issue has not yet been diagnosed or fixed.
+- **Vivaldi mobile and other mobile browsers are not currently targeted or supported.**
+- **Firefox:** Only temporary desktop loading has been tested; permanent installation and distribution have not been verified.
+- No automated browser UI test is included; popup logic is verified by unit tests and code review, not by driving every supported browser.
 - Imported text is pasted by the user directly into the Import text area (Ctrl+V or the context menu); the extension never reads the clipboard.
