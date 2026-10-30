@@ -4,6 +4,7 @@ import {
   buildTxtFilename,
   formatDateStamp,
   sanitizeFilenamePart,
+  savedGroupNameFor,
 } from "../src/export.js";
 import { buildTabGroupList, getExplicitGroupName, groupWithHeader } from "../src/groups.js";
 
@@ -210,5 +211,22 @@ describe("preview / clipboard / TXT export parity", () => {
     expect(group.formattedText).not.toContain("\n\n\n");
     // header + 2 entries = 4 blank-line-separated parts.
     expect(group.formattedText.split("\n\n")).toHaveLength(4);
+  });
+});
+
+describe("savedGroupNameFor", () => {
+  test("uses the explicit group title when the group is named", () => {
+    expect(savedGroupNameFor({ title: "Work", color: "blue" })).toBe("Work");
+  });
+
+  test("falls back to the display name for unnamed groups (no invented name)", () => {
+    expect(savedGroupNameFor({ title: "", color: "blue" })).toBe("Untitled group (blue)");
+    expect(savedGroupNameFor({ title: "  ", color: "" })).toBe("Untitled group");
+    expect(savedGroupNameFor(null)).toBe("Untitled group");
+    expect(savedGroupNameFor(undefined)).toBe("Untitled group");
+  });
+
+  test("handles the virtual Ungrouped Tabs entry", () => {
+    expect(savedGroupNameFor({ title: "Ungrouped Tabs" })).toBe("Ungrouped Tabs");
   });
 });

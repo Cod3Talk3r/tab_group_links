@@ -6,7 +6,11 @@
  * `buildTxtExport()` and turns the result into a Blob download.
  */
 
-import { formatNumberedUrlList } from "./groups.js";
+import {
+  formatNumberedUrlList,
+  getExplicitGroupName,
+  getGroupDisplayName,
+} from "./groups.js";
 
 /**
  * `formatNumberedUrlList` is re-exported for callers that still format raw
@@ -14,6 +18,21 @@ import { formatNumberedUrlList } from "./groups.js";
  * `formattedText` (title + URL) instead.
  */
 export { formatNumberedUrlList };
+
+/**
+ * The name a group is stored under in Saved Links.
+ *
+ * Mirrors the extension's existing naming convention (see `groups.js`): an
+ * explicitly set browser-group title wins; otherwise the same display name
+ * the group list already shows is used (`"Untitled group (blue)"`,
+ * `"Ungrouped Tabs"`, ...) so no misleading name is invented.
+ *
+ * @param {{ title?: unknown, color?: unknown } | null | undefined} group
+ * @returns {string}
+ */
+export function savedGroupNameFor(group) {
+  return getExplicitGroupName(group) ?? getGroupDisplayName(group);
+}
 
 const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\u0000-\u001f\u007f]+/g;
 const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
