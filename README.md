@@ -7,7 +7,7 @@ plain-text list, in the original tab order.
 
 **Primary target:** Brave. **Expected-compatible:** Chrome, Edge (both support
 Manifest V3, the `chrome.tabGroups` API, and `navigator.clipboard` / Blob
-downloads). Compatibility with Chrome and Edge has **not** been verified through
+downloads). Compatibility with Chrome has **not** been verified through
 real-browser testing.
 
 No external dependencies, no remote services, no icons.
