@@ -8,6 +8,8 @@ import {
   getExplicitGroupName,
   getGroupDisplayName,
   getTabUrl,
+  groupColor,
+  GROUP_COLORS,
   groupWithHeader,
   normalizeUrl,
   tabTitleFallback,
@@ -595,6 +597,57 @@ describe("exported constants", () => {
 
   test("UNGROUPED_TITLE is the expected display name", () => {
     expect(UNGROUPED_TITLE).toBe("Ungrouped Tabs");
+  });
+});
+
+/* ── group colours ── */
+
+describe("GROUP_COLORS", () => {
+  test("covers exactly the nine standard Chromium tab-group colours", () => {
+    expect(Object.keys(GROUP_COLORS).sort()).toEqual([
+      "blue",
+      "cyan",
+      "green",
+      "grey",
+      "orange",
+      "pink",
+      "purple",
+      "red",
+      "yellow",
+    ]);
+  });
+
+  test("every colour resolves to a distinct non-empty CSS colour", () => {
+    const values = Object.values(GROUP_COLORS);
+    expect(values.every((c) => typeof c === "string" && c.startsWith("#") && c.length >= 4)).toBe(
+      true,
+    );
+    expect(new Set(values).size).toBe(values.length);
+  });
+
+  test("grey is the fallback used when no colour is set", () => {
+    expect(GROUP_COLORS.grey).toBe("#8a94a6");
+  });
+});
+
+describe("groupColor", () => {
+  test("maps each of the nine supported colours to its CSS value", () => {
+    for (const [name, css] of Object.entries(GROUP_COLORS)) {
+      expect(groupColor(name)).toBe(css);
+    }
+  });
+
+  test("falls back to grey for unknown colour names", () => {
+    expect(groupColor("teal")).toBe(GROUP_COLORS.grey);
+    expect(groupColor("magenta")).toBe(GROUP_COLORS.grey);
+    expect(groupColor("cobalt")).toBe(GROUP_COLORS.grey);
+  });
+
+  test("falls back to grey for missing, empty and non-string values", () => {
+    expect(groupColor(undefined)).toBe(GROUP_COLORS.grey);
+    expect(groupColor(null)).toBe(GROUP_COLORS.grey);
+    expect(groupColor("")).toBe(GROUP_COLORS.grey);
+    expect(groupColor(0)).toBe(GROUP_COLORS.grey);
   });
 });
 

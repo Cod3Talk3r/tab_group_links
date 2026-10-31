@@ -8,7 +8,7 @@ A small Manifest V3 browser extension that lists the tab groups in the current w
 - **Google Chrome:** Tested and working.
 - **Microsoft Edge:** Tested and working.
 - **Mozilla Firefox (desktop):** Tested and working when loaded temporarily. Permanent installation has not been verified.
-- **Opera (desktop):** Partially compatible. Opera's Tab Islands are not fully supported; their names and colors are not reliably detected.
+- **Opera (desktop):** Partially compatible. Tab Islands are listed with their names and member tabs, but their actual colours are not exposed through the public `chrome.tabGroups` API. Opera uses its own themed colour palette for Tab Islands, while UI-created islands report `color: "grey"` through the standard API. See [Known limitations](#known-limitations).
 - **Vivaldi (desktop):** Partially compatible. A popup issue occurs after deleting a saved group; see [Known limitations](#known-limitations).
 
 The extension uses browser extension APIs, including `tabs`, `tabGroups`, and `storage`.
@@ -90,8 +90,8 @@ The popup header is compact: a single row with the extension title and a small, 
 ## Permissions
 
 | Permission | Why |
-|---|---|
-| `tabGroups` | Read tab group titles, colors, and membership. |
+| --- | --- |
+| `tabGroups` | Read tab group titles, standard colours, and membership. |
 | `tabs` | Read tab URLs. |
 | `clipboardWrite` | Write the URL list to the clipboard (including the fallback). |
 | `storage` | Keep imported/saved link groups in local extension storage. |
@@ -265,7 +265,7 @@ node --check src/open-links.js
 - Very restricted pages may expose no URL at all; those tabs are skipped.
 - Copying relies on the popup staying open until the clipboard write resolves (normally immediate). The fallback requires the popup to be focused.
 - The browser initiates the TXT download via a standard download link; the extension does not receive a completion event, so it reports that the download has started, not that the file was saved. Browser settings or policies may still block or ask where to save the download.
-- **Opera:** Tab Islands are not fully supported. In testing, island tabs were not consistently represented as named/color-coded groups; some appeared as ungrouped tabs with an unreliable generated color label.
+- **Opera:** Tab Islands are listed with their names and member tabs, but their colours are not detected correctly. Opera 139 renders Tab Islands with a themed colour from its own `island_bg_*` palette (e.g. `peninsula_purple`). That themed colour lives in Opera's internal island model, not in the standard Chromium tab-group colour enum, and the public `chrome.tabGroups` API does not expose it: for a UI-created island, both `tabGroups.query()` and `tabGroups.get()` report `color: "grey"` even when the island is clearly coloured in the tab strip (verified with a real island that is purple in the UI but reports `grey`). Groups created through the extension API (`chrome.tabs.group` / `chrome.tabGroups.update`) report all nine standard colours correctly; only Opera's own UI-created islands are affected. Because there is no public API field carrying the themed colour, the extension cannot render the true island colour and deliberately falls back to grey rather than guessing. No workaround is implemented: reading the themed colour would require private APIs or browser-UI scraping, which the extension avoids.
 - **Vivaldi desktop:** In testing, after deleting a saved group, the extension popup may stop reopening until another extension is clicked. This issue has not yet been diagnosed or fixed.
 - **Vivaldi mobile and other mobile browsers are not currently targeted or supported.**
 - **Firefox:** Only temporary desktop loading has been tested; permanent installation and distribution have not been verified.

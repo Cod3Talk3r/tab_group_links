@@ -2,6 +2,7 @@ import {
   buildTabGroupList,
   buildUngroupedEntry,
   formatGroupHeaderLine,
+  groupColor,
   UNGROUPED_GROUP_ID,
   UNGROUPED_TITLE,
 } from "./src/groups.js";
@@ -15,18 +16,6 @@ import {
   saveSavedGroups,
 } from "./src/storage.js";
 import { openLinkInBackground, openLinksInBackground } from "./src/open-links.js";
-
-const GROUP_COLORS = {
-  grey: "#8a94a6",
-  blue: "#4c8bf5",
-  red: "#e5484d",
-  yellow: "#f5b83d",
-  green: "#46a758",
-  pink: "#e93d82",
-  purple: "#8e4ec6",
-  cyan: "#12a594",
-  orange: "#f76b15",
-};
 
 const state = {
   groups: [],
@@ -94,10 +83,6 @@ function skippedNote(group) {
   return group.skippedCount
     ? ` Skipped ${group.skippedCount} ${plural(group.skippedCount, "tab")} with no accessible URL.`
     : "";
-}
-
-function groupColor(color) {
-  return GROUP_COLORS[color] ?? GROUP_COLORS.grey;
 }
 
 function isVirtualGroup(group) {

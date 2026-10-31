@@ -21,6 +21,41 @@ export const UNGROUPED_GROUP_ID = -1;
 export const UNGROUPED_TITLE = "Ungrouped Tabs";
 
 /**
+ * CSS colours for the standard Chromium tab-group colours.
+ *
+ * These are the exact nine values the `chrome.tabGroups` API reports for a
+ * group's `color` field (the `tabGroups.Color` enum). Any value that is not
+ * one of these keys — including a missing/unknown colour reported by a
+ * browser — falls back to `grey` via {@link groupColor}.
+ */
+export const GROUP_COLORS = {
+  grey: "#8a94a6",
+  blue: "#4c8bf5",
+  red: "#e5484d",
+  yellow: "#f5b83d",
+  green: "#46a758",
+  pink: "#e93d82",
+  purple: "#8e4ec6",
+  cyan: "#12a594",
+  orange: "#f76b15",
+};
+
+/**
+ * Resolve a `chrome.tabGroups` colour name to its CSS colour string.
+ *
+ * Unknown, empty or missing values fall back to `grey` so the popup never
+ * renders an invalid colour. The Chromium enum only contains the nine keys
+ * above; browsers that expose any other value (for example a themed Tab
+ * Island colour that the public API does not map) render as grey.
+ *
+ * @param {string | null | undefined} color
+ * @returns {string}
+ */
+export function groupColor(color) {
+  return GROUP_COLORS[color] ?? GROUP_COLORS.grey;
+}
+
+/**
  * Trim a URL string and reject values without a URL scheme.
  * @param {unknown} value
  * @returns {string | null}
