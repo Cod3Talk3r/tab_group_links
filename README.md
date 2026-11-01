@@ -282,3 +282,13 @@ node --check src/open-links.js
 - **Firefox:** Only temporary desktop loading has been tested; permanent installation and distribution have not been verified.
 - No automated browser UI test is included; popup logic is verified by unit tests and code review, not by driving every supported browser.
 - Imported text is pasted by the user directly into the Import text area (Ctrl+V or the context menu); the extension never reads the clipboard.
+
+## License
+
+Copyright (C) 2026 Mohammad Reza Asadi
+
+This project is licensed under the **GNU General Public License v3.0 only (GPL-3.0-only)**.
+
+You are free to use, study, modify, and redistribute this software under the terms of the license. If you distribute this software or modified versions of it, you must comply with the applicable requirements of the GPL-3.0 license.
+
+See the [LICENSE](LICENSE) file for the full license text.
