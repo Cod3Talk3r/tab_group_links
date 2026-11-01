@@ -165,7 +165,7 @@ Titles and URLs are kept exactly as written: long URLs, query strings, fragments
 <details>
 <summary>Import behaviour and edge cases</summary>
 
-- Nothing is opened or requested during import. Parsing and storage are pure data operations; the only code that can create a tab is `src/open-links.js`, invoked solely from explicit **Open** buttons and the **Open all** action — never from import.
+- Nothing is opened or requested during import. Parsing and storage are pure data operations; the only code that can create a tab is `src/open-links.js`, invoked solely from explicit **Open** buttons and the **Open all** action — never from import. The Open-all actions additionally group the tabs they create into new native tab groups via `chrome.tabs.group` / `chrome.tabGroups.update`, still only through `src/open-links.js`.
 - Repeated URLs inside one group are collapsed to the first occurrence.
 - Empty groups are skipped with a warning; a header without a name is ignored with a warning; malformed lines and titles without a following URL are skipped with a per-line warning.
 - Blank lines and Windows (`CRLF`) / old-Mac (`CR`) line endings are tolerated; a leading UTF-8 BOM is stripped.
@@ -186,7 +186,17 @@ An existing group is never silently overwritten.
 
 ### Saved links panel
 
-Confirmed imports appear under **Saved links** as expandable groups with per-link **Open** and **Remove** buttons, an **Open all** icon button on each saved group (opens that group's links in background tabs, in order), and a group-level **Remove** button that deletes the entire saved group after a confirmation dialog.
+Confirmed imports appear under **Saved links** as expandable groups with per-link **Open** and **Remove** buttons, an **Open all** icon button on each saved group, and a group-level **Remove** button that deletes the entire saved group after a confirmation dialog.
+
+The **Open all** actions create native browser tab groups:
+
+- The per-group **Open all** opens that group's links in background tabs, in order, and puts exactly those newly opened tabs into **one new native tab group named after the saved group**.
+- The global **Open all** button (next to the Saved links heading) does the same for every non-empty saved group: each saved group becomes its **own** new native tab group, named after that saved group, and links keep their original order.
+- Empty saved groups are skipped — no tab and no group is created for them.
+- Only tabs created by the current Open-all action are grouped. Existing browser tabs and existing browser tab groups are never modified, and a browser tab group with the same name is never reused — a new one is created.
+- If one link fails to open, the rest still open and group normally; the status line reports how many could not be opened.
+- If the tabs open but native grouping fails, the tabs are left intact and the failure is reported.
+- Browsers without the Tab Groups API (for example Firefox) fall back to the previous behaviour: links open as plain background tabs with no grouping.
 
 These are saved links stored in this extension's data, **not** open browser tabs; the panel says so explicitly. They persist across popup closures and browser restarts, and are never auto-restored into tabs.
 
@@ -255,6 +265,7 @@ node --check src/open-links.js
 - `test/storage.test.js` covers the saved-group model, conflict detection, merge/rename/cancel policies, duplicate names, and local storage round-trips, malformed data and quota/IO failures.
 - `test/export.test.js` covers filename sanitization, date stamps, TXT export content, and that preview, clipboard, and export text are identical.
 - `test/extension-files.test.js` checks the manifest, permissions, local file references, virtual group exports from `src/groups.js`, that the runtime sources contain no remote URLs, and crucially that the import and storage modules never touch `tabs` — only `src/open-links.js` can create tabs, and only from explicit user actions.
+- `test/open-links.test.js` covers the background-tab opening helpers and the Open-all grouping behaviour: per-group and global Open all, correct group titles and membership, original link order, empty groups, partial failures, group-creation failure after tabs open, fallback when the Tab Groups API is missing, and that existing tabs/groups are never modified.
 
 </details>
 
@@ -271,13 +282,3 @@ node --check src/open-links.js
 - **Firefox:** Only temporary desktop loading has been tested; permanent installation and distribution have not been verified.
 - No automated browser UI test is included; popup logic is verified by unit tests and code review, not by driving every supported browser.
 - Imported text is pasted by the user directly into the Import text area (Ctrl+V or the context menu); the extension never reads the clipboard.
-
-## License
-
-Copyright (C) 2026 Mohammad Reza Asadi
-
-This project is licensed under the **GNU General Public License v3.0 only (GPL-3.0-only)**.
-
-You are free to use, study, modify, and redistribute this software under the terms of the license. If you distribute this software or modified versions of it, you must comply with the applicable requirements of the GPL-3.0 license.
-
-See the [LICENSE](LICENSE) file for the full license text.

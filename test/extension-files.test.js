@@ -315,12 +315,25 @@ describe("extension files", () => {
     const source = read("popup.js");
     expect(source).toContain('openAllButton.dataset.action = "open-group"');
     expect(source).toContain('aria-label", "Open all links in this group"');
-    expect(source).toContain("openLinksInBackground(urls)");
-    expect(source).toContain("group.entries.map((entry) => entry.url)");
+    // The per-group Open-all delegates to the shared grouping helper, which
+    // opens the group's URLs and groups only the tabs it creates.
+    expect(source).toContain("openSavedGroupInTabGroup(group)");
+    expect(source).toContain("group.entries.length === 0");
     // Remove is relabelled and keeps its confirmation safeguard.
     expect(source).toContain('removeAllButton.textContent = "Remove"');
     expect(source).not.toContain('textContent = "Remove group"');
     expect(source).toMatch(/action === "remove-group"[\s\S]*?window\.confirm/);
+  });
+
+  test("global Open all groups each non-empty Saved Group via the shared helper", () => {
+    const source = read("popup.js");
+    expect(source).toContain("handleOpenAllClick");
+    expect(source).toMatch(/saved\.filter\(\(group\) => \(group\?\.entries \?\? \[\]\)\.length > 0\)/);
+    expect(source).toContain("openSavedGroupsInTabGroups(nonEmpty)");
+    expect(source).toContain("groupsCreated");
+    // No existing tab or group is ever touched; only the new helper is used.
+    expect(source).not.toContain("tabs.group(");
+    expect(source).not.toContain("tabGroups.update(");
   });
 
   test("every el.X reference in popup.js is initialized in the el object (ref audit)", () => {

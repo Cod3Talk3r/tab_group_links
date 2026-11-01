@@ -15,7 +15,11 @@ import {
   sanitizeSavedGroupName,
   saveSavedGroups,
 } from "./src/storage.js";
-import { openLinkInBackground, openLinksInBackground } from "./src/open-links.js";
+import {
+  openLinkInBackground,
+  openSavedGroupInTabGroup,
+  openSavedGroupsInTabGroups,
+} from "./src/open-links.js";
 
 const state = {
   groups: [],
@@ -83,6 +87,51 @@ function skippedNote(group) {
   return group.skippedCount
     ? ` Skipped ${group.skippedCount} ${plural(group.skippedCount, "tab")} with no accessible URL.`
     : "";
+}
+
+/**
+ * Render the status line for a single Open-all operation that used
+ * {@link openSavedGroupInTabGroup}. Keeps feedback consistent across the
+ * per-group and global Open-all actions.
+ *
+ * - `opened === 0`: nothing could be opened.
+ * - `grouped`: a new native tab group was created and named.
+ * - `!grouped && groupError`: tabs opened but grouping failed.
+ * - `!grouped && !groupError`: fallback, ungrouped background opening.
+ *
+ * @param {{ opened: number, failed: number, grouped: boolean, groupError: string | null }} result
+ * @param {{ name?: string, emptyLabel?: string }} [options]
+ */
+function setOpenStatus(result, options = {}) {
+  const failedNote =
+    result.failed > 0
+      ? ` ${result.failed} ${plural(result.failed, "link")} could not be opened.`
+      : "";
+  if (result.opened === 0) {
+    setStatus(
+      "error",
+      `${options.emptyLabel ?? "Could not open any links."}${failedNote}`,
+    );
+    return;
+  }
+  if (result.grouped) {
+    setStatus(
+      "success",
+      `Opened ${result.opened} ${plural(result.opened, "link")} in a new tab group “${options.name ?? ""}”.${failedNote}`,
+    );
+    return;
+  }
+  if (result.groupError) {
+    setStatus(
+      "error",
+      `Opened ${result.opened} ${plural(result.opened, "link")}, but could not group them: ${result.groupError}.${failedNote}`,
+    );
+    return;
+  }
+  setStatus(
+    "success",
+    `Opened ${result.opened} ${plural(result.opened, "link")} in new background tabs.${failedNote}`,
+  );
 }
 
 function isVirtualGroup(group) {
@@ -926,17 +975,9 @@ async function handleSavedClick(event) {
         setStatus("info", "This group has no links to open.");
         return;
       }
-      const urls = group.entries.map((entry) => entry.url);
       try {
-        const opened = await openLinksInBackground(urls);
-        setStatus(
-          opened === 0
-            ? "error"
-            : "success",
-          opened === 0
-            ? "Could not open any links in this group."
-            : `Opened ${opened} ${plural(opened, "link")} in new background tabs.`,
-        );
+        const result = await openSavedGroupInTabGroup(group);
+        setOpenStatus(result, { name: group.name, emptyLabel: "Could not open any links in this group." });
       } catch (error) {
         setStatus("error", `Could not open the links: ${describeError(error)}`);
       }
@@ -966,7 +1007,8 @@ async function handleOpenAllClick(event) {
   const button = event.target;
   if (!(button instanceof Element) || !button.closest("#open-all-btn")) return;
   const saved = await loadSavedGroups();
-  const total = saved.reduce((sum, group) => sum + group.entries.length, 0);
+  const nonEmpty = saved.filter((group) => (group?.entries ?? []).length > 0);
+  const total = nonEmpty.reduce((sum, group) => sum + group.entries.length, 0);
   if (total === 0) {
     setStatus("info", "There are no saved links to open.");
     return;
@@ -976,8 +1018,37 @@ async function handleOpenAllClick(event) {
   );
   if (!confirmed) return;
   try {
-    const opened = await openLinksInBackground(saved.flatMap((group) => group.entries.map((entry) => entry.url)));
-    setStatus("success", `Opened ${opened} ${plural(opened, "link")} in new background tabs.`);
+    // Each non-empty Saved Group becomes its own native tab group, in order.
+    const result = await openSavedGroupsInTabGroups(nonEmpty);
+    const failedNote =
+      result.failed > 0
+        ? ` ${result.failed} ${plural(result.failed, "link")} could not be opened.`
+        : "";
+    if (result.opened === 0) {
+      setStatus("error", `Could not open any saved links.${failedNote}`);
+      return;
+    }
+    if (result.groupsCreated > 0) {
+      const groupNote = result.groupErrors.length
+        ? ` ${result.groupErrors.length} ${plural(result.groupErrors.length, "group")} could not be grouped.`
+        : "";
+      setStatus(
+        "success",
+        `Opened ${result.opened} ${plural(result.opened, "link")} in ${result.groupsCreated} new tab ${plural(result.groupsCreated, "group")}.${groupNote}${failedNote}`,
+      );
+      return;
+    }
+    if (result.groupErrors.length) {
+      setStatus(
+        "error",
+        `Opened ${result.opened} ${plural(result.opened, "link")}, but could not group them: ${result.groupErrors.join("; ")}.${failedNote}`,
+      );
+      return;
+    }
+    setStatus(
+      "success",
+      `Opened ${result.opened} ${plural(result.opened, "link")} in new background tabs.${failedNote}`,
+    );
   } catch (error) {
     setStatus("error", `Could not open the links: ${describeError(error)}`);
   }
