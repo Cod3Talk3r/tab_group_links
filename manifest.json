@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tab Group Links",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "List tab groups in the current window, preview their numbered tab URLs, and copy or export them as plain text.",
   "minimum_chrome_version": "89",
   "permissions": ["tabGroups", "tabs", "clipboardWrite", "storage"],
